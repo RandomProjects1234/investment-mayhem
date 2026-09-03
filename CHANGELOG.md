@@ -14,6 +14,7 @@ run `node tools/release.mjs`.
 - **New** — Bug reports filed from the game now actually reach the developer instead of only saving to your device.
 - **Fix** — The published security rules were rejected by Firebase because they carried "comment" keys, which are not valid rule nodes. Found while publishing them for real.
 - **Tuning** — Version numbers now run 1.4, 1.5, 1.6 and so on up to 2.0, instead of the 1.10 / 1.20 style. Earlier builds have been relabelled to match: what shipped as v1.10 is v1.2 here, and v1.20 is v1.3.
+- **Fix** — A username that is already taken now says so plainly instead of reporting it as a failure to connect.
 - **Fix** — Saves, watchlists and cloud profiles carry across the rename untouched. The world seed is deliberately unchanged, so every property and collectible is the same one you owned before.
 
 ## v1.3 — Bonds, savings, collectibles and bug reports

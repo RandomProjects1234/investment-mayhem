@@ -81,7 +81,11 @@ async function start(online) {
       wireOnline();
       UI.setStatus('online as ' + name, true);
     } catch (e) {
-      $('#setup-status').textContent = 'Could not connect: ' + e.message;
+      // A taken username is not a connection failure, and telling players it is
+      // sends them off debugging the wrong thing.
+      $('#setup-status').textContent = /taken/i.test(e.message)
+        ? 'That username is already taken on this server. Pick another one.'
+        : 'Could not connect: ' + e.message;
       return;
     }
   } else {
