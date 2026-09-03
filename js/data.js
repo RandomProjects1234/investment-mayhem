@@ -6,8 +6,8 @@
 // to the real market. Properties, alt assets and startups are fictional and
 // generated procedurally from WORLD_SEED, so nothing needs to be stored server
 // side: every client rebuilds the identical universe in ~15ms.
-import { rngFrom, hash32, pick, rr, clamp } from './rng.js?v=1.8';
-import { SECTOR_ROWS, FUNDS } from './companies.js?v=1.8';
+import { rngFrom, hash32, pick, rr, clamp } from './rng.js?v=1.9';
+import { SECTOR_ROWS, FUNDS } from './companies.js?v=1.9';
 
 // Frozen on purpose. The seed decides every property, collectible and startup
 // in the world; changing it would rebuild them all and orphan saved holdings,
@@ -225,6 +225,12 @@ export function generateCollectibles() {
     ['Roman Coin Hoard', 'odd', 47000], ['Arcade Cabinet, Boxed', 'odd', 5600],
     ['Signed Tour Guitar', 'odd', 68000], ['Cinema Poster, 1977', 'odd', 21000],
     ['Antique Sea Chart', 'odd', 15800], ['Studio Pottery Vase', 'odd', 4300],
+    ['Holo Starter Card, Graded 10', 'card', 118000], ['Shadowless Base Set Box', 'card', 96000],
+    ['Promo Card, Tournament Only', 'card', 43000], ['Error Print Card', 'card', 17500],
+    ['Full Art Chase Card', 'card', 9400], ['Sealed Booster Bundle', 'card', 3600],
+    ['Signed Rookie Jersey', 'odd', 28000], ['Championship Ring', 'odd', 52000],
+    ['Moon Landing Print, Signed', 'odd', 36000], ['Hand-drawn Animation Cel', 'art', 27000],
+    ['Titanium Dive Watch, NOS', 'watch', 19500], ['Grower Champagne Case', 'wine', 6800],
   ];
   const CLASSES = { art: 'Art', watch: 'Watches', card: 'Cards', wine: 'Wine & spirits', odd: 'Curiosities' };
   const usedTickers = new Set();

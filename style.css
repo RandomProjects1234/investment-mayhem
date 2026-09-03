@@ -328,4 +328,18 @@ h2 .mini{float:right;margin-top:-4px}
   .chainrow>.c{display:block}
 }
 
+/* ---------- v1.9: the cup ---------- */
+.cuprow{grid-template-columns:minmax(150px,2fr) .8fr .8fr .8fr 1fr 110px}
+.cupmatch{display:flex;justify-content:space-between;gap:8px;font-family:var(--mono);font-size:12px;
+  padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.cupmatch b{font-weight:600}
+.cupround{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#9fb0c4;margin:10px 0 4px}
+.betline{display:flex;justify-content:space-between;gap:8px;font-family:var(--mono);font-size:12px;
+  padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+@media(max-width:600px){
+  .cuprow{grid-template-columns:1.6fr 1fr 110px}
+  .cuprow>.c{display:none}
+  .cuprow>.c:nth-child(1),.cuprow>.c:nth-child(4),.cuprow>.c:nth-child(6){display:block}
+}
+
 [hidden]{display:none !important}

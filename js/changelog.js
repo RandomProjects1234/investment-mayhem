@@ -1,9 +1,20 @@
 // Release history and roadmap. Rendered in-game (click the version badge) and
 // mirrored in CHANGELOG.md / ROADMAP.md so the repo tells the same story.
 
-export const VERSION = 'v1.8';
+export const VERSION = 'v1.9';
 
 export const RELEASES = [
+  {
+    version: 'v1.9',
+    date: '2026-09-03',
+    title: 'The Cup, and a home for collectibles',
+    items: [
+      ['new', 'The Cup. A 32 team knockout with a new tournament every two hours and a round every twenty minutes. Back a team to win it, to reach the final, or to score the most goals; odds come from the ratings, not from the result, and stakes lock when the first round kicks off. Asked for by theasoltani-afk and by Yesman.'],
+      ['new', 'Collectibles have their own tab now instead of hiding under Alternatives, and there are twelve new lots including graded cards, sealed boxes and error prints. Asked for by johnchicken.'],
+      ['fix', 'Nine reports were waiting and all nine have now been read. The three sitting unanswered are upcoming films, betting on league games beyond the cup, and flipping designer fakes. They are on the list.'],
+      ['bal', 'A cup result is a pure function of the tournament number, like everything else here, which means someone reading the source could work one out before backing it. Settling from a server is the honest fix and it is the same open problem as the rest of the game.'],
+    ],
+  },
   {
     version: 'v1.8',
     date: '2026-09-03',
@@ -141,22 +152,23 @@ export const RELEASES = [
 
 // What the next update is aiming at. Ordered by what would change the game most.
 export const NEXT = {
-  version: 'v1.9',
-  title: 'The cup',
+  version: 'v2.0',
+  title: 'The rest of the request list',
   items: [
-    ['Champions league investing',
-     'Asked for by theasoltani-afk: back teams to score the most goals, to reach a final, and to win the thing, with the rounds simulated. A 32 team knockout, a new edition every few hours, and odds set from team strength.'],
-    ['A result nobody can look up in advance',
-     'Every price here is a function of time, so a player reading the source could work out a match before betting on it. Each round will instead be settled from a seed written to the database at kickoff, which cannot be overwritten once it exists. The cost is that cup betting needs an online server, and the game will say so rather than quietly taking a solo bet.'],
+    ['Upcoming films',
+     'Yesman asked to invest in films that have not come out yet, earning from how popular they turn out and how many tickets they sell worldwide. A slate of sequels, a budget, an opening weekend.'],
+    ['League games, not just the cup',
+     'Yesman again: back teams across a league season rather than only a knockout, so there is something running between tournaments.'],
+    ['The counterfeit market',
+     'Also Yesman: buy fakes cheap and try to sell them high, with the obvious risk that a lot turns out to be worthless.'],
     ['Price alerts',
-     'Tell the game to shout when something crosses a level. The order engine already replays the ticks you missed, so an alert can tell you what happened while you were away.'],
+     'Tell the game to shout when something crosses a level, instead of watching for it.'],
     ['A first run walkthrough',
-     'There is a lot in here now. A new player deserves a guided first ten minutes.'],
+     'There is a great deal in here now. A new player deserves a guided first ten minutes.'],
   ],
   later: [
-    ['Server-authoritative trading',
-     'The honest fix for cheating: run buy and sell inside a Cloud Function so a browser cannot invent a net worth. It needs Firebase on the paid plan, so it is a decision to make rather than a thing to code.'],
-    ['Trade history export', 'Take your fills away as a file.'],
+    ['Server-authoritative trading and settling',
+     'The honest fix for both cheating and cup results: run trades and settlements on a server so a browser cannot invent an outcome. It needs Firebase on the paid plan, so it is a decision to make rather than a thing to code.'],
     ['Bots', 'A few simulated traders so a quiet server still has a market worth beating.'],
   ],
 };

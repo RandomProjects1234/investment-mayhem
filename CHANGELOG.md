@@ -1,10 +1,18 @@
 # Changelog
 
-All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v1.8**.
+All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v1.9**.
 
 This file is generated from `js/changelog.js`, which is also what the in-game
 update log reads — click the version badge in the corner. Edit that file, then
 run `node tools/release.mjs`.
+
+## v1.9 — The Cup, and a home for collectibles
+*2026-09-03*
+
+- **New** — The Cup. A 32 team knockout with a new tournament every two hours and a round every twenty minutes. Back a team to win it, to reach the final, or to score the most goals; odds come from the ratings, not from the result, and stakes lock when the first round kicks off. Asked for by theasoltani-afk and by Yesman.
+- **New** — Collectibles have their own tab now instead of hiding under Alternatives, and there are twelve new lots including graded cards, sealed boxes and error prints. Asked for by johnchicken.
+- **Fix** — Nine reports were waiting and all nine have now been read. The three sitting unanswered are upcoming films, betting on league games beyond the cup, and flipping designer fakes. They are on the list.
+- **Tuning** — A cup result is a pure function of the tournament number, like everything else here, which means someone reading the source could work one out before backing it. Settling from a server is the honest fix and it is the same open problem as the rest of the game.
 
 ## v1.8 — The report button actually works now
 *2026-09-03*

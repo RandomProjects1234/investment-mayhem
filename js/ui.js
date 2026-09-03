@@ -1,12 +1,13 @@
 // All DOM rendering. Rows are built once per filter change and only their
 // number cells are rewritten on each tick, so 640 stocks stay smooth.
-import * as G from './game.js?v=1.8';
+import * as G from './game.js?v=1.9';
 import { priceNow, priceAt, changePct, history, nowTick, marketIndex,
          recentEvents, flowOf, flowImpact, policyRate, bondYield,
-         nextEarningsTick, earningsQuarter, earningsSurprise, isVacant } from './market.js?v=1.8';
-import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=1.8';
-import * as Net from './net.js?v=1.8';
-import { RELEASES, NEXT, VERSION } from './changelog.js?v=1.8';
+         nextEarningsTick, earningsQuarter, earningsSurprise, isVacant } from './market.js?v=1.9';
+import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=1.9';
+import * as Cup from './cup.js?v=1.9';
+import * as Net from './net.js?v=1.9';
+import { RELEASES, NEXT, VERSION } from './changelog.js?v=1.9';
 
 const $ = s => document.querySelector(s);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -84,6 +85,7 @@ function boot() {
   buildPropControls();
   buildBank();
   buildCountries();
+  buildCup();
   buildLoan();
   buildTransfer();
   const rent2 = $('#p-collect2');
@@ -99,7 +101,9 @@ function boot() {
 function buildTab() {
   if (UI.tab === 'stocks') renderStockRows();
   if (UI.tab === 'property') renderPropRows();
-  if (UI.tab === 'alts') { renderAltRows(); renderCollectRows(); }
+  if (UI.tab === 'alts') renderAltRows();
+  if (UI.tab === 'collect') renderCollectRows();
+  if (UI.tab === 'cup') renderCup();
   if (UI.tab === 'bank') renderBank();
   if (UI.tab === 'countries') renderCountryRows();
   if (UI.tab === 'orders') renderOrders();
@@ -124,7 +128,9 @@ function refresh() {
   if (UI.tab === 'portfolio') renderPortfolio();
   else if (UI.tab === 'stocks') { tickStockRows(); renderSectorStrip(); renderEarnings(); }
   else if (UI.tab === 'property') tickPropRows();
-  else if (UI.tab === 'alts') { tickAltRows(); tickCollectRows(); }
+  else if (UI.tab === 'alts') tickAltRows();
+  else if (UI.tab === 'collect') tickCollectRows();
+  else if (UI.tab === 'cup') tickCup();
   else if (UI.tab === 'bank') tickBank();
   else if (UI.tab === 'countries') tickCountryRows();
   else if (UI.tab === 'orders') renderOrders();
@@ -571,7 +577,7 @@ const tickAltRows = () => altRows.forEach(r => tickAssetRow(r, G.state.alts));
 // ---------------- collectibles ----------------
 let collectRows = [];
 function renderCollectRows() {
-  const body = $('#collect-body'); body.innerHTML = '';
+  const body = $('#collect-body2'); body.innerHTML = '';
   collectRows = G.COLLECTIBLES.map(a => makeAssetRow(a, body, true));
   tickCollectRows();
 }
@@ -657,6 +663,103 @@ function tickCountryRows() {
       r.lastSpark = t;
       drawSpark(r.row._canvas, history(r.a, 40, 30), c >= 0);
     }
+  }
+}
+
+// ---------------- the cup ----------------
+let cupRows = [];
+
+function buildCup() {
+  const sel = $('#cup-market');
+  for (const m of Cup.MARKETS) sel.appendChild(new Option(m.name, m.id));
+  sel.addEventListener('change', renderCup);
+  $('#cup-stake').value = '1000';
+}
+
+function renderCup() {
+  const t = nowTick();
+  const edition = Cup.currentEdition();
+  const market = $('#cup-market').value || 'winner';
+  const played = Cup.roundsPlayed(edition, t);
+  const body = $('#cup-body'); body.innerHTML = '';
+  cupRows = [];
+
+  const teams = [...Cup.TEAMS].sort((a, b) => b.strength - a.strength);
+  for (const team of teams) {
+    const price = Cup.odds(market, team.id);
+    const row = el('div', 'row cuprow');
+    row.innerHTML =
+      '<div class="c sym"><b>' + team.name + '</b></div>' +
+      '<div class="c tag">' + team.country + '</div>' +
+      '<div class="c num">' + team.strength + '</div>' +
+      '<div class="c num">' + price.toFixed(2) + '</div>' +
+      '<div class="c num ret"></div>' +
+      '<div class="c act"></div>';
+    const btn = el('button', 'mini', played > 0 ? 'Closed' : 'Back');
+    btn.disabled = played > 0;
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      toast(G.placeBet(market, team.id, Number($('#cup-stake').value)).msg);
+      renderCup(); refresh();
+    });
+    row.querySelector('.act').appendChild(btn);
+    body.appendChild(row);
+    cupRows.push({ team, price, ret: row.querySelector('.ret') });
+  }
+  tickCup();
+  renderCupResults(edition, t);
+  renderCupBets();
+}
+
+function tickCup() {
+  const t = nowTick();
+  const edition = Cup.currentEdition();
+  const played = Cup.roundsPlayed(edition, t);
+  $('#cup-status').textContent = 'Tournament ' + (edition % 1000) +
+    (played === 0 ? ' - betting open' : played >= Cup.ROUNDS.length ? ' - finished' : ' - ' + Cup.ROUNDS[played - 1] + ' played');
+  const nextTick = played >= Cup.ROUNDS.length ? Cup.editionEnd(edition) : Cup.nextRoundTick(edition, t);
+  const mins = Math.max(0, Math.round((nextTick - t) * 3 / 60));
+  const untilNext = Math.max(0, Math.round((Cup.editionEnd(edition) - t) * 3 / 60));
+  $('#cup-next').textContent = played >= Cup.ROUNDS.length
+    ? 'betting opens again in ' + untilNext + ' min'
+    : (played === 0 ? 'betting closes in ' : 'next round in ') + mins + ' min';
+  const stake = Number($('#cup-stake').value) || 0;
+  for (const r of cupRows) r.ret.textContent = G.fmt(stake * r.price);
+}
+
+function renderCupResults(edition, t) {
+  const box = $('#cup-results'); box.innerHTML = '';
+  const played = Cup.roundsPlayed(edition, t);
+  if (!played) { box.appendChild(el('div', 'empty', 'Not kicked off yet. Bets are open.')); return; }
+  const sim = Cup.simulate(edition);
+  for (let r = played - 1; r >= 0; r--) {
+    box.appendChild(el('div', 'cupround', sim.rounds[r].name));
+    for (const m of sim.rounds[r].matches) {
+      const d = el('div', 'cupmatch');
+      const home = Cup.team(m.a).name, away = Cup.team(m.b).name;
+      d.innerHTML = '<span>' + escapeHtml(home) + ' v ' + escapeHtml(away) + '</span>' +
+        '<b>' + m.ga + ' - ' + m.gb + (m.pens ? ' p' : '') + '</b>';
+      box.appendChild(d);
+    }
+  }
+  if (played >= Cup.ROUNDS.length) {
+    box.insertBefore(el('div', 'cupround', 'Winner: ' + Cup.team(sim.champion).name +
+      '  |  most goals: ' + Cup.team(sim.topScorer).name), box.firstChild);
+  }
+}
+
+function renderCupBets() {
+  const box = $('#cup-bets'); box.innerHTML = '';
+  const bets = G.state.bets || [];
+  if (!bets.length) { box.appendChild(el('div', 'empty', 'No bets yet.')); return; }
+  for (const b of bets.slice(0, 20)) {
+    const t = Cup.team(b.teamId);
+    const market = (Cup.MARKETS.find(m => m.id === b.market) || {}).name || b.market;
+    const d = el('div', 'betline ' + (b.status === 'won' ? 'up' : b.status === 'lost' ? 'down' : ''));
+    d.innerHTML = '<span>' + escapeHtml(t ? t.name : b.teamId) + ' - ' + market + '</span>' +
+      '<b>' + (b.status === 'open' ? G.fmt(b.stake) + ' at ' + b.odds.toFixed(2)
+        : b.status === 'won' ? '+' + G.fmt(b.payout - b.stake) : '-' + G.fmt(b.stake)) + '</b>';
+    box.appendChild(d);
   }
 }
 

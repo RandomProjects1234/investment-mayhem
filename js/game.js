@@ -1,11 +1,12 @@
 // Game state, rules and the main loop.
 import { generateCompanies, generateFunds, generateProperties, generateAlts,
          generateBonds, generateCollectibles, generateCountries, generateStartups, startupOutcome,
-         STARTUP_ROUND_TICKS, COLLECT_SPREAD, SECTORS } from './data.js?v=1.8';
+         STARTUP_ROUND_TICKS, COLLECT_SPREAD, SECTORS } from './data.js?v=1.9';
 import { priceAt, priceNow, nowTick, TICK_MS, policyRate, setFlow,
          quoteOption, nextExpiries, strikeLadder, realisedVol,
-         isVacant, occupiedFraction } from './market.js?v=1.8';
-import * as Net from './net.js?v=1.8';
+         isVacant, occupiedFraction } from './market.js?v=1.9';
+import * as Cup from './cup.js?v=1.9';
+import * as Net from './net.js?v=1.9';
 
 export const FEE = 0.002;            // 0.2% trading commission
 export const PROP_CLOSING = 0.03;    // 3% closing cost on property purchase
@@ -62,6 +63,7 @@ function blankState() {
     orders: [],     // resting limit and stop orders
     loan: { principal: 0, last: Date.now() },
     options: {},    // contract id -> { assetId, kind, strike, expiryTick, qty, cost }
+    bets: [],       // cup bets, newest first
     trades: [],     // closed trades, newest first, for the analytics card
     orderTick: 0,   // last tick the order book was checked against
     startNetWorth: START_CASH, startIndex: 0,
@@ -128,6 +130,7 @@ export function migrate() {
   if (!Array.isArray(state.nwHistory)) state.nwHistory = [];
   if (!Array.isArray(state.orders)) state.orders = [];
   if (!Array.isArray(state.trades)) state.trades = [];
+  if (!Array.isArray(state.bets)) state.bets = [];
   if (!state.loan || typeof state.loan.principal !== 'number') state.loan = { principal: 0, last: Date.now() };
   if (!state.startNetWorth) state.startNetWorth = state.netWorth || START_CASH;
   if (!state.season || typeof state.season.startNetWorth !== 'number') {
@@ -196,6 +199,7 @@ export function adopt(remote) {
   state.orders = Array.isArray(remote.orders) ? remote.orders : [];
   state.loan = remote.loan || state.loan;
   state.trades = Array.isArray(remote.trades) ? remote.trades : state.trades;
+  state.bets = Array.isArray(remote.bets) ? remote.bets : state.bets;
   state.startNetWorth = remote.startNetWorth || state.startNetWorth;
   state.startIndex = remote.startIndex || state.startIndex;
   state.season = remote.season || state.season;
@@ -228,6 +232,7 @@ export function positionsValue() {
   for (const id in state.startups) {
     if (!state.startups[id].resolved) angel += state.startups[id].amount;
   }
+  for (const b of state.bets) if (b.status === 'open') angel += b.stake;
   const stocks = bookValue(state.holdings);
   const alt = bookValue(state.alts);
   const bonds = bookValue(state.bonds);
@@ -513,6 +518,61 @@ export function collectRent(only) {
     saveLocal();
   }
   return total;
+}
+
+// ---- the cup -----------------------------------------------------------
+// Back a team to win it, to reach the final, or to score the most goals. Stakes
+// are locked once the tournament kicks off, and everything settles when it ends.
+export const MAX_BET = 250000;
+
+export function openBets() { return state.bets.filter(b => b.status === 'open'); }
+
+export function stakedOn() {
+  let total = 0;
+  for (const b of openBets()) total += b.stake;
+  return total;
+}
+
+export function placeBet(market, teamId, stake) {
+  const t = nowTick();
+  const edition = Cup.editionOf(t);
+  if (!Cup.bettingOpen(edition, t)) {
+    const mins = Math.max(0, Math.round((Cup.editionEnd(edition) - t) * 3 / 60));
+    return { ok: false, msg: 'This one has kicked off. Betting opens again in ' + mins + ' min.' };
+  }
+  if (!Cup.team(teamId)) return { ok: false, msg: 'Unknown team.' };
+  if (!(stake > 0)) return { ok: false, msg: 'Enter a stake.' };
+  if (stake > state.cash) return { ok: false, msg: 'Not enough cash.' };
+  if (stake > MAX_BET) return { ok: false, msg: 'The book will not take more than ' + fmt(MAX_BET) + ' on one bet.' };
+  const price = Cup.odds(market, teamId);
+  state.cash -= stake;
+  state.bets.unshift({
+    id: 'b' + Date.now().toString(36), edition, market, teamId,
+    stake, odds: price, status: 'open', placed: Date.now(),
+  });
+  log('Backed ' + Cup.team(teamId).name + ' at ' + price.toFixed(2) + ' for ' + fmt(stake), true);
+  saveLocal();
+  return { ok: true, msg: 'On at ' + price.toFixed(2) + ' to return ' + fmt(stake * price) };
+}
+
+function settleBets() {
+  const t = nowTick();
+  const done = {};
+  for (const b of state.bets) {
+    if (b.status !== 'open') continue;
+    if (t < Cup.editionEnd(b.edition)) continue;
+    const result = done[b.edition] || (done[b.edition] = Cup.simulate(b.edition));
+    const won = Cup.betWon(result, b.market, b.teamId);
+    b.status = won ? 'won' : 'lost';
+    b.payout = won ? b.stake * b.odds : 0;
+    if (won) state.cash += b.payout;
+    state.stats.realized += b.payout - b.stake;
+    recordTrade(Cup.team(b.teamId).name, b.payout - b.stake, 'cup');
+    log(Cup.team(b.teamId).name + (won
+      ? ' came in. ' + fmt(b.payout) + ' back'
+      : ' did not. ' + fmt(b.stake) + ' gone'), won);
+  }
+  if (Object.keys(done).length) saveLocal();
 }
 
 // ---- seasons -----------------------------------------------------------
@@ -1056,6 +1116,7 @@ export function saveNow() {
 export function startLoop() {
   const step = () => {
     rollSeason();
+    settleBets();
     settleOptions();
     resolveStartups();
     checkOrders();

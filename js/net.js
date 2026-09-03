@@ -98,6 +98,7 @@ export async function savePlayer(state, season, seasonRet) {
     holdings: state.holdings || {}, props: state.props || {},
     alts: state.alts || {}, bonds: state.bonds || {}, collect: state.collect || {},
     countries: state.countries || {}, options: state.options || {},
+    bets: (state.bets || []).slice(0, 40),
     shorts: state.shorts || {}, loan: state.loan || { principal: 0, last: Date.now() },
     orders: (state.orders || []).filter(o => o.status === 'open').slice(0, 20),
     season: state.season || null, startNetWorth: state.startNetWorth || 0,

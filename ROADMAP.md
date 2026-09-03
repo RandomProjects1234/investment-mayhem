@@ -1,27 +1,30 @@
 # Roadmap
 
-## Next up — v1.9: The cup
+## Next up — v2.0: The rest of the request list
 
-### Champions league investing
+### Upcoming films
 
-Asked for by theasoltani-afk: back teams to score the most goals, to reach a final, and to win the thing, with the rounds simulated. A 32 team knockout, a new edition every few hours, and odds set from team strength.
+Yesman asked to invest in films that have not come out yet, earning from how popular they turn out and how many tickets they sell worldwide. A slate of sequels, a budget, an opening weekend.
 
-### A result nobody can look up in advance
+### League games, not just the cup
 
-Every price here is a function of time, so a player reading the source could work out a match before betting on it. Each round will instead be settled from a seed written to the database at kickoff, which cannot be overwritten once it exists. The cost is that cup betting needs an online server, and the game will say so rather than quietly taking a solo bet.
+Yesman again: back teams across a league season rather than only a knockout, so there is something running between tournaments.
+
+### The counterfeit market
+
+Also Yesman: buy fakes cheap and try to sell them high, with the obvious risk that a lot turns out to be worthless.
 
 ### Price alerts
 
-Tell the game to shout when something crosses a level. The order engine already replays the ticks you missed, so an alert can tell you what happened while you were away.
+Tell the game to shout when something crosses a level, instead of watching for it.
 
 ### A first run walkthrough
 
-There is a lot in here now. A new player deserves a guided first ten minutes.
+There is a great deal in here now. A new player deserves a guided first ten minutes.
 
 ## Further out
 
-- **Server-authoritative trading** — The honest fix for cheating: run buy and sell inside a Cloud Function so a browser cannot invent a net worth. It needs Firebase on the paid plan, so it is a decision to make rather than a thing to code.
-- **Trade history export** — Take your fills away as a file.
+- **Server-authoritative trading and settling** — The honest fix for both cheating and cup results: run trades and settlements on a server so a browser cannot invent an outcome. It needs Firebase on the paid plan, so it is a decision to make rather than a thing to code.
 - **Bots** — A few simulated traders so a quiet server still has a market worth beating.
 
 ---
