@@ -67,6 +67,7 @@ const htmlUrl = new URL('index.html', root);
 const html = readFileSync(htmlUrl, 'utf8')
   .replace(/href="style\.css(\?v=[^"]*)?"/, `href="style.css?v=${V}"`)
   .replace(/src="js\/main\.js(\?v=[^"]*)?"/, `src="js/main.js?v=${V}"`)
+  .replace(/src="firebase-config\.js(\?v=[^"]*)?"/, `src="firebase-config.js?v=${V}"`)
   .replace(/>v[0-9.]+<\/button>/, `>${VERSION}</button>`)
   .replace(/<b>v[0-9.]+<\/b>/, `<b>${VERSION}</b>`)
   .replace(/<b id="cl-version">v[0-9.]+<\/b>/, `<b id="cl-version">${VERSION}</b>`);
