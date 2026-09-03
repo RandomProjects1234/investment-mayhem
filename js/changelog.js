@@ -1,20 +1,24 @@
 // Release history and roadmap. Rendered in-game (click the version badge) and
 // mirrored in CHANGELOG.md / ROADMAP.md so the repo tells the same story.
 
-export const VERSION = 'v1.21';
+export const VERSION = 'v1.4';
 
 export const RELEASES = [
   {
-    version: 'v1.21',
+    version: 'v1.4',
     date: '2026-09-03',
-    title: 'Investment Mayhem',
+    title: 'Investment Mayhem, and multiplayer is live',
     items: [
       ['new', 'The game is now called Investment Mayhem. New name in the header, the tab title and the market index; the site moved to /investment-mayhem/ and the old link redirects.'],
-      ['fix', 'Saves, watchlists and cloud profiles carry across the rename untouched. The world seed is deliberately unchanged, so every property and collectible is the same one you owned yesterday.'],
+      ['new', 'The server is live. Press Play online and you are on the public world: shared leaderboard, live trade tape, chat, player transfers, presence, and prices that everyone nudges together.'],
+      ['new', 'Bug reports filed from the game now actually reach the developer instead of only saving to your device.'],
+      ['fix', 'The published security rules were rejected by Firebase because they carried "comment" keys, which are not valid rule nodes. Found while publishing them for real.'],
+      ['bal', 'Version numbers now run 1.4, 1.5, 1.6 and so on up to 2.0, instead of the 1.10 / 1.20 style. Earlier builds have been relabelled to match: what shipped as v1.10 is v1.2 here, and v1.20 is v1.3.'],
+      ['fix', 'Saves, watchlists and cloud profiles carry across the rename untouched. The world seed is deliberately unchanged, so every property and collectible is the same one you owned before.'],
     ],
   },
   {
-    version: 'v1.20',
+    version: 'v1.3',
     date: '2026-09-03',
     title: 'Bonds, savings, collectibles and bug reports',
     items: [
@@ -35,7 +39,7 @@ export const RELEASES = [
     ],
   },
   {
-    version: 'v1.10',
+    version: 'v1.2',
     date: '2026-09-03',
     title: 'Update log',
     items: [
@@ -77,7 +81,7 @@ export const RELEASES = [
 
 // What the next update is aiming at. Ordered by what would change the game most.
 export const NEXT = {
-  version: 'v1.3',
+  version: 'v1.5',
   title: 'Orders and leverage',
   items: [
     ['Limit and stop orders',
@@ -88,7 +92,7 @@ export const NEXT = {
      'Borrow against your portfolio at an interest rate tied to the policy rate that now exists, with a maintenance requirement and a real margin call.'],
     ['An earnings calendar',
      'Company shocks currently arrive unannounced. Scheduling them per company and showing the date turns news from weather into something you can trade ahead of.'],
-    ['Everything reported since v1.20',
+    ['Everything reported since v1.4',
      'Bug reports are read before every release. Whatever comes in through the report button gets triaged here and fixed items are listed in this log.'],
     ['Portfolio analytics',
      'Best and worst trade, per-sector exposure, return against the index rather than against zero.'],

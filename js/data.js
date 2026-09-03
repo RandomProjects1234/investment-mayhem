@@ -6,8 +6,8 @@
 // to the real market. Properties, alt assets and startups are fictional and
 // generated procedurally from WORLD_SEED, so nothing needs to be stored server
 // side: every client rebuilds the identical universe in ~15ms.
-import { rngFrom, hash32, pick, rr, clamp } from './rng.js?v=1.21';
-import { SECTOR_ROWS, FUNDS } from './companies.js?v=1.21';
+import { rngFrom, hash32, pick, rr, clamp } from './rng.js?v=1.4';
+import { SECTOR_ROWS, FUNDS } from './companies.js?v=1.4';
 
 // Frozen on purpose. The seed decides every property, collectible and startup
 // in the world; changing it would rebuild them all and orphan saved holdings,

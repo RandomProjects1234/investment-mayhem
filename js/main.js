@@ -1,8 +1,8 @@
 // Entry point: login screen, Firebase wiring, then hand off to the game loop.
-import * as G from './game.js?v=1.21';
-import * as Net from './net.js?v=1.21';
-import { UI } from './ui.js?v=1.21';
-import { setFlow } from './market.js?v=1.21';
+import * as G from './game.js?v=1.4';
+import * as Net from './net.js?v=1.4';
+import { UI } from './ui.js?v=1.4';
+import { setFlow } from './market.js?v=1.4';
 
 const $ = s => document.querySelector(s);
 

@@ -1,6 +1,6 @@
 # Investment Mayhem — a multiplayer investing sim on GitHub Pages
 
-**Play it: <https://randomprojects1234.github.io/investment-mayhem/>** &nbsp;·&nbsp; version **v1.21** &nbsp;·&nbsp; [changelog](CHANGELOG.md) &nbsp;·&nbsp; [roadmap](ROADMAP.md)
+**Play it: <https://randomprojects1234.github.io/investment-mayhem/>** &nbsp;·&nbsp; version **v1.4** &nbsp;·&nbsp; [changelog](CHANGELOG.md) &nbsp;·&nbsp; [roadmap](ROADMAP.md)
 
 Pure static frontend (HTML + CSS + ES modules, no build step) with Firebase
 Realtime Database as the only backend. **624 real listed companies** across 11
@@ -59,7 +59,10 @@ Then open <http://localhost:3491>. (Windows: `Start Investment Mayhem.bat` in th
 
 ## Multiplayer
 
-Two ways in:
+The public site is already connected to a live Firebase project ("Investment Mayhem"), so
+**Play online** just works: shared leaderboard, live trade tape, chat, transfers and presence.
+
+Two ways to run your own world instead:
 
 1. **Host with your own project** — follow the Firebase setup below and either paste your
    config into `firebase-config.js` (everyone who opens the site joins your world) or into
@@ -153,6 +156,8 @@ were away is capped at four hours.
 | `database.rules.json` | RTDB security rules |
 
 ## Cutting a release
+
+Versions run `1.4`, `1.5`, … `1.9`, `2.0`, `2.1` — plain increments, no `1.10`/`1.20`.
 
 1. Edit `js/changelog.js`: bump `VERSION`, add a `RELEASES` entry, update `NEXT`.
 2. `node tools/release.mjs` — rewrites CHANGELOG.md and ROADMAP.md and stamps the version

@@ -1,18 +1,22 @@
 # Changelog
 
-All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v1.21**.
+All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v1.4**.
 
 This file is generated from `js/changelog.js`, which is also what the in-game
 update log reads — click the version badge in the corner. Edit that file, then
 run `node tools/release.mjs`.
 
-## v1.21 — Investment Mayhem
+## v1.4 — Investment Mayhem, and multiplayer is live
 *2026-09-03*
 
 - **New** — The game is now called Investment Mayhem. New name in the header, the tab title and the market index; the site moved to /investment-mayhem/ and the old link redirects.
-- **Fix** — Saves, watchlists and cloud profiles carry across the rename untouched. The world seed is deliberately unchanged, so every property and collectible is the same one you owned yesterday.
+- **New** — The server is live. Press Play online and you are on the public world: shared leaderboard, live trade tape, chat, player transfers, presence, and prices that everyone nudges together.
+- **New** — Bug reports filed from the game now actually reach the developer instead of only saving to your device.
+- **Fix** — The published security rules were rejected by Firebase because they carried "comment" keys, which are not valid rule nodes. Found while publishing them for real.
+- **Tuning** — Version numbers now run 1.4, 1.5, 1.6 and so on up to 2.0, instead of the 1.10 / 1.20 style. Earlier builds have been relabelled to match: what shipped as v1.10 is v1.2 here, and v1.20 is v1.3.
+- **Fix** — Saves, watchlists and cloud profiles carry across the rename untouched. The world seed is deliberately unchanged, so every property and collectible is the same one you owned before.
 
-## v1.20 — Bonds, savings, collectibles and bug reports
+## v1.3 — Bonds, savings, collectibles and bug reports
 *2026-09-03*
 
 - **New** — Bonds. Eight of them, from a 2 year treasury to high yield corporate debt. Prices move against a central bank policy rate, scaled by duration, and each one pays its coupon every minute.
@@ -30,7 +34,7 @@ run `node tools/release.mjs`.
 - **Fix** — Buying a property from its detail window now updates the property table behind it, and rent can be collected straight from the portfolio.
 - **Fix** — Fractional orders are rejected for assets that do not support them, instead of quietly creating a third of a share.
 
-## v1.10 — Update log
+## v1.2 — Update log
 *2026-09-03*
 
 - **New** — Click the version badge in the corner, or "what's new" on the login card, for the full update log and what is coming next.

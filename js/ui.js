@@ -1,11 +1,11 @@
 // All DOM rendering. Rows are built once per filter change and only their
 // number cells are rewritten on each tick, so 640 stocks stay smooth.
-import * as G from './game.js?v=1.21';
+import * as G from './game.js?v=1.4';
 import { priceNow, priceAt, changePct, history, nowTick, marketIndex,
-         recentEvents, flowOf, flowImpact, policyRate, bondYield } from './market.js?v=1.21';
-import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=1.21';
-import * as Net from './net.js?v=1.21';
-import { RELEASES, NEXT, VERSION } from './changelog.js?v=1.21';
+         recentEvents, flowOf, flowImpact, policyRate, bondYield } from './market.js?v=1.4';
+import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=1.4';
+import * as Net from './net.js?v=1.4';
+import { RELEASES, NEXT, VERSION } from './changelog.js?v=1.4';
 
 const $ = s => document.querySelector(s);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
