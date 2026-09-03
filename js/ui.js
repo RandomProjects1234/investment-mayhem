@@ -1,11 +1,12 @@
 // All DOM rendering. Rows are built once per filter change and only their
 // number cells are rewritten on each tick, so 640 stocks stay smooth.
-import * as G from './game.js?v=1.5';
+import * as G from './game.js?v=1.6';
 import { priceNow, priceAt, changePct, history, nowTick, marketIndex,
-         recentEvents, flowOf, flowImpact, policyRate, bondYield } from './market.js?v=1.5';
-import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=1.5';
-import * as Net from './net.js?v=1.5';
-import { RELEASES, NEXT, VERSION } from './changelog.js?v=1.5';
+         recentEvents, flowOf, flowImpact, policyRate, bondYield,
+         nextEarningsTick, earningsQuarter, earningsSurprise } from './market.js?v=1.6';
+import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=1.6';
+import * as Net from './net.js?v=1.6';
+import { RELEASES, NEXT, VERSION } from './changelog.js?v=1.6';
 
 const $ = s => document.querySelector(s);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -83,6 +84,7 @@ function boot() {
   buildPropControls();
   buildBank();
   buildCountries();
+  buildLoan();
   buildTransfer();
   const rent2 = $('#p-collect2');
   if (rent2) rent2.addEventListener('click', e => {
@@ -100,6 +102,7 @@ function buildTab() {
   if (UI.tab === 'alts') { renderAltRows(); renderCollectRows(); }
   if (UI.tab === 'bank') renderBank();
   if (UI.tab === 'countries') renderCountryRows();
+  if (UI.tab === 'orders') renderOrders();
   if (UI.tab === 'angel') renderAngel();
   if (UI.tab === 'social') { renderLeaderboard(); renderFeed(); renderChat(); }
   refresh();
@@ -119,11 +122,12 @@ function refresh() {
   $('#hdr-rent').textContent = G.fmt(G.pendingRent());
 
   if (UI.tab === 'portfolio') renderPortfolio();
-  else if (UI.tab === 'stocks') { tickStockRows(); renderSectorStrip(); }
+  else if (UI.tab === 'stocks') { tickStockRows(); renderSectorStrip(); renderEarnings(); }
   else if (UI.tab === 'property') tickPropRows();
   else if (UI.tab === 'alts') { tickAltRows(); tickCollectRows(); }
   else if (UI.tab === 'bank') tickBank();
   else if (UI.tab === 'countries') tickCountryRows();
+  else if (UI.tab === 'orders') renderOrders();
   else if (UI.tab === 'angel') tickAngel();
   if (modalAsset) tickModal();
   refreshSaveStatus();
@@ -190,6 +194,7 @@ function renderPortfolio() {
   $('#stat-coupons').textContent = G.fmt(st.coupons || 0);
   $('#stat-interest').textContent = G.fmt(st.interest || 0);
   $('#stat-sovereign').textContent = G.fmt(st.sovereign || 0);
+  renderAnalytics(v);
 
   // Holdings tables rebuild at most twice a second; they are small.
   if (Date.now() - lastPortfolioBuild < 500) return;
@@ -302,6 +307,133 @@ function renderSectorStrip() {
   }
 }
 
+// ---------------- analytics ----------------
+// What the numbers actually mean: return against where you started, against the
+// market, and which trades did the damage.
+function renderAnalytics(v) {
+  const start = G.state.startNetWorth || G.START_CASH;
+  const ret = (G.state.netWorth - start) / start * 100;
+  $('#an-return').textContent = G.fmtPct(ret);
+  $('#an-return').className = cls(ret);
+
+  const idxNow = marketIndex(nowTick());
+  const idxStart = G.state.startIndex || idxNow;
+  const idxRet = (idxNow - idxStart) / idxStart * 100;
+  const diff = ret - idxRet;
+  $('#an-vs').textContent = G.fmtPct(diff) + ' (index ' + G.fmtPct(idxRet) + ')';
+  $('#an-vs').className = cls(diff);
+
+  const trades = G.state.trades || [];
+  if (trades.length) {
+    const wins = trades.filter(t => t.pl > 0).length;
+    $('#an-win').textContent = Math.round(wins / trades.length * 100) + '% of ' + trades.length;
+    const best = trades.reduce((a, b) => b.pl > a.pl ? b : a);
+    const worst = trades.reduce((a, b) => b.pl < a.pl ? b : a);
+    $('#an-best').textContent = best.sym + '  ' + G.fmt(best.pl);
+    $('#an-best').className = 'up';
+    $('#an-worst').textContent = worst.sym + '  ' + G.fmt(worst.pl);
+    $('#an-worst').className = 'down';
+  } else {
+    $('#an-win').textContent = '-';
+    $('#an-best').textContent = '-';
+    $('#an-worst').textContent = '-';
+  }
+
+  $('#an-debt').textContent = G.fmt(v.debt);
+  $('#an-debt').className = v.debt > 0 ? 'down' : '';
+  $('#an-short').textContent = G.fmt(v.shortLiability);
+  $('#an-borrowfee').textContent = G.fmt(G.state.stats.borrowFees || 0);
+
+  const box = $('#short-list'); box.innerHTML = '';
+  const ids = Object.keys(G.state.shorts || {});
+  if (!ids.length) {
+    box.appendChild(el('div', 'hint', 'No short positions. Open one from any stock, fund, coin or country.'));
+  }
+  for (const id of ids) {
+    const a = G.ASSETS.get(id); if (!a) continue;
+    const pos = G.state.shorts[id];
+    const liability = pos.units * priceNow(a);
+    const pl = pos.proceeds - liability;
+    const row = el('div', 'shortline');
+    row.innerHTML = '<b>' + a.ticker + ' -' + G.fmtUnits(pos.units) + '</b>' +
+      '<span class="' + cls(pl) + '">' + (pl >= 0 ? '+' : '') + G.fmt(pl) + '</span>';
+    row.addEventListener('click', () => openAsset(id));
+    row.style.cursor = 'pointer';
+    box.appendChild(row);
+  }
+}
+
+// ---------------- orders ----------------
+function renderOrders() {
+  const body = $('#order-body'); body.innerHTML = '';
+  const working = G.openOrders();
+  if (!working.length) {
+    body.appendChild(el('div', 'empty', 'Nothing working. Open any asset and switch the order type to Limit or Stop.'));
+  }
+  for (const o of working) {
+    const a = G.ASSETS.get(o.assetId); if (!a) continue;
+    const px = priceNow(a);
+    const row = el('div', 'row orow');
+    row.innerHTML =
+      '<div class="c sym"><b>' + a.ticker + '</b><span>' + a.name + '</span></div>' +
+      '<div class="c tag"><span class="ordtag ' + o.side + '">' + o.side + ' ' + o.type + '</span></div>' +
+      '<div class="c num">' + G.fmtPx(o.price) + '</div>' +
+      '<div class="c num">' + G.fmtPx(px) + '</div>' +
+      '<div class="c num">' + G.fmtUnits(o.units) + '</div>' +
+      '<div class="c num">' + (o.reserved ? G.fmt(o.reserved) : '-') + '</div>' +
+      '<div class="c act"></div>';
+    const btn = el('button', 'mini danger', 'Cancel');
+    btn.addEventListener('click', e => { e.stopPropagation(); toast(G.cancelOrder(o.id).msg); renderOrders(); });
+    row.querySelector('.act').appendChild(btn);
+    row.addEventListener('click', () => openAsset(o.assetId));
+    body.appendChild(row);
+  }
+
+  const hist = $('#order-history'); hist.innerHTML = '';
+  const done = G.state.orders.filter(o => o.status !== 'open').slice(0, 12);
+  if (!done.length) hist.appendChild(el('div', 'empty', 'No filled or cancelled orders yet.'));
+  for (const o of done) {
+    const a = G.ASSETS.get(o.assetId);
+    const d = el('div', 'logline ' + (o.status === 'filled' ? 'up' : 'down'));
+    d.textContent = (a ? a.ticker : o.assetId) + '  ' + o.side + ' ' + o.type + '  ' +
+      G.fmtUnits(o.units) + ' @ ' + G.fmtPx(o.price) +
+      (o.status === 'filled' ? '  filled at ' + G.fmtPx(o.filledPrice) : '  ' + o.status);
+    hist.appendChild(d);
+  }
+}
+
+// ---------------- margin loan ----------------
+function buildLoan() {
+  $('#loan-borrow').addEventListener('click', () => {
+    toast(G.borrow(Number($('#loan-amount').value)).msg); tickBank();
+  });
+  $('#loan-repay').addEventListener('click', () => {
+    toast(G.repay(Number($('#loan-amount').value)).msg); tickBank();
+  });
+}
+
+// ---------------- earnings calendar ----------------
+let earnCache = -1;
+function renderEarnings() {
+  const t = nowTick();
+  if (t - earnCache < 6 && $('#earnings-strip').children.length) return;
+  earnCache = t;
+  const soon = G.STOCKS
+    .map(a => ({ a, at: nextEarningsTick(a, t) }))
+    .sort((x, y) => x.at - y.at)
+    .slice(0, 12);
+  const box = $('#earnings-strip');
+  box.innerHTML = '';
+  for (const { a, at } of soon) {
+    const mins = Math.max(0, Math.round((at - t) * 3 / 60));
+    const chip = el('div', 'earn' + (mins <= 3 ? ' soon' : ''));
+    chip.innerHTML = '<b>' + a.ticker + '</b><span>' + (mins < 1 ? 'reporting now' : 'in ' + mins + ' min') + '</span>';
+    chip.title = a.name + ' reports earnings';
+    chip.addEventListener('click', () => openAsset(a.id));
+    box.appendChild(chip);
+  }
+}
+
 // ---------------- news ----------------
 let newsCache = { tick: -1, html: '' };
 function renderNews() {
@@ -355,6 +487,7 @@ function filteredCompanies() {
 
 function renderStockRows() {
   renderSectorStrip();
+  renderEarnings();
   const list = filteredCompanies();
   const shown = list.slice(0, stockState.limit);
   $('#f-count').textContent = list.length + ' listed';
@@ -548,6 +681,10 @@ function tickBank() {
   $('#bank-myrate').textContent = G.savingsRate().toFixed(2) + '%';
   $('#bank-balance').textContent = G.fmt(G.state.savings.balance);
   $('#bank-earned').textContent = G.fmt(G.state.stats.interest || 0);
+  $('#loan-rate').textContent = G.loanRate().toFixed(2) + '%';
+  $('#loan-principal').textContent = G.fmt(G.state.loan.principal);
+  $('#loan-room').textContent = G.fmt(Math.max(0, G.maxLoan() - G.state.loan.principal));
+  $('#loan-collateral').textContent = G.fmt(G.collateral());
   for (const r of bondRows) {
     const p = priceNow(r.a);
     r.px.textContent = G.fmt(p);
@@ -816,7 +953,7 @@ function sendChatMsg() {
 }
 
 // ---------------- asset modal ----------------
-let modalAsset = null;
+let modalAsset = null, orderType = 'market';
 let tradeMode = (() => {
   try { return localStorage.getItem('is_trade_mode') === 'cash' ? 'cash' : 'units'; }
   catch (e) { return 'units'; }
@@ -846,20 +983,48 @@ function openAsset(id) {
         : a.class || 'Asset');
   const isProp = a.kind === 'property';
   $('#m-trade').hidden = isProp;
+  $('#m-order').hidden = isProp;
+  $('#m-short').hidden = isProp || !G.canShort(a);
   $('#m-proptrade').hidden = !isProp;
   if (!isProp) {
     $('#m-qty').value = '1';
     setTradeMode(tradeMode);
     $('#m-mode').onclick = () => setTradeMode(tradeMode === 'units' ? 'cash' : 'units');
+    setOrderType(orderType);
+    $('#m-ordertype').onchange = e => setOrderType(e.target.value);
     $('#m-buy').onclick = () => {
       const v = Number($('#m-qty').value);
-      toast((tradeMode === 'cash' ? G.buyValue(a.id, v) : G.buy(a.id, v)).msg);
+      if (orderType !== 'market') {
+        const units = tradeMode === 'cash' ? v / Number($('#m-trigger').value || priceNow(a)) : v;
+        toast(G.placeOrder({ assetId: a.id, side: 'buy', type: orderType,
+          price: Number($('#m-trigger').value), units }).msg);
+      } else {
+        toast((tradeMode === 'cash' ? G.buyValue(a.id, v) : G.buy(a.id, v)).msg);
+      }
       refresh();
     };
     $('#m-sell').onclick = () => {
       let units = Number($('#m-qty').value);
       if (tradeMode === 'cash') units = units / priceNow(a);
-      toast(G.sell(a.id, units).msg); refresh();
+      if (orderType !== 'market') {
+        toast(G.placeOrder({ assetId: a.id, side: 'sell', type: orderType,
+          price: Number($('#m-trigger').value), units }).msg);
+      } else {
+        toast(G.sell(a.id, units).msg);
+      }
+      refresh();
+    };
+    $('#m-shortbtn').onclick = () => {
+      let units = Number($('#m-qty').value);
+      if (tradeMode === 'cash') units = units / priceNow(a);
+      toast(G.openShort(a.id, units).msg); refresh();
+    };
+    $('#m-cover').onclick = () => {
+      const pos = G.state.shorts[a.id];
+      let units = Number($('#m-qty').value);
+      if (tradeMode === 'cash') units = units / priceNow(a);
+      toast(G.coverShort(a.id, pos ? Math.min(units || pos.units, pos.units) : units).msg);
+      refresh();
     };
     $('#m-max').onclick = () => {
       if (tradeMode === 'cash') { $('#m-qty').value = Math.floor(G.state.cash); return; }
@@ -885,6 +1050,23 @@ function openAsset(id) {
   tickModal();
 }
 function closeModal() { $('#modal').hidden = true; modalAsset = null; }
+
+function setOrderType(type) {
+  orderType = type;
+  const a = modalAsset;
+  $('#m-ordertype').value = type;
+  $('#m-trigger').hidden = type === 'market';
+  $('#m-orderhint').hidden = type === 'market';
+  if (type !== 'market' && a) {
+    const px = priceNow(a);
+    $('#m-trigger').value = (type === 'limit' ? px * 0.95 : px * 1.05).toFixed(px >= 100 ? 0 : 2);
+    $('#m-orderhint').textContent = type === 'limit'
+      ? 'A limit buys below the market or sells above it. It fills the moment the price crosses, even with the tab closed.'
+      : 'A stop buys above the market or sells below it. Use a sell stop to cap a loss.';
+  }
+  $('#m-buy').textContent = type === 'market' ? 'Buy' : 'Place buy';
+  $('#m-sell').textContent = type === 'market' ? 'Sell' : 'Place sell';
+}
 
 function tickModal() {
   const a = modalAsset; if (!a) return;
@@ -929,6 +1111,20 @@ function tickModal() {
       ['Upkeep', (a.upkeep * 100).toFixed(0) + '%'],
       ['Net rent', G.fmt(px * a.rentRate * (1 - a.upkeep)) + '/min']);
   }
+  if (a.kind === 'stock') {
+    const t = nowTick();
+    const mins = Math.max(0, Math.round((nextEarningsTick(a, t) - t) * 3 / 60));
+    const lastQ = earningsQuarter(a, t);
+    const surprise = lastQ >= 0 ? earningsSurprise(a, lastQ) : 0;
+    facts.push(['Next earnings', mins < 1 ? 'reporting now' : 'in ' + mins + ' min'],
+      ['Last report', lastQ < 0 ? 'none yet' : (surprise >= 0 ? 'beat' : 'missed')]);
+  }
+  const shortPos = G.state.shorts[a.id];
+  if (shortPos) {
+    const liab = shortPos.units * px;
+    facts.push(['Short', G.fmtUnits(shortPos.units) + ' units'],
+      ['Short P/L', G.fmt(shortPos.proceeds - liab)]);
+  }
   const fi = flowImpact(a);
   facts.push(['Player flow', (fi >= 0 ? '+' : '') + (fi * 100).toFixed(2) + '% (' + G.fmtUnits(flowOf(a.id)) + ' net)']);
   const book = a.kind === 'alt' ? G.state.alts : G.state.holdings;
@@ -942,6 +1138,15 @@ function tickModal() {
     }
   }
   $('#m-facts').innerHTML = facts.map(([k, v]) => '<div><span>' + k + '</span><b>' + v + '</b></div>').join('');
+  if (!$('#m-short').hidden) {
+    const sp = G.state.shorts[a.id];
+    $('#m-cover').disabled = !sp;
+    $('#m-shortinfo').textContent = sp
+      ? 'Short ' + G.fmtUnits(sp.units) + ' at an average of ' + G.fmtPx(sp.proceeds / sp.units) +
+        '. Borrow costs ' + G.SHORT_FEE + '% a year.'
+      : 'Shorting borrows the units and sells them. You need ' +
+        (G.SHORT_INITIAL * 100) + '% of the value as equity, and pay ' + G.SHORT_FEE + '% a year to borrow.';
+  }
   if (a.kind === 'property') {
     const owned = !!G.state.props[a.id];
     $('#m-pbuy').disabled = owned; $('#m-psell').disabled = !owned;

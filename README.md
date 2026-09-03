@@ -1,6 +1,6 @@
 # Investment Mayhem — a multiplayer investing sim on GitHub Pages
 
-**Play it: <https://randomprojects1234.github.io/investment-mayhem/>** &nbsp;·&nbsp; version **v1.5** &nbsp;·&nbsp; [changelog](CHANGELOG.md) &nbsp;·&nbsp; [roadmap](ROADMAP.md)
+**Play it: <https://randomprojects1234.github.io/investment-mayhem/>** &nbsp;·&nbsp; version **v1.6** &nbsp;·&nbsp; [changelog](CHANGELOG.md) &nbsp;·&nbsp; [roadmap](ROADMAP.md)
 
 Pure static frontend (HTML + CSS + ES modules, no build step) with Firebase
 Realtime Database as the only backend. **624 real listed companies** across 11
@@ -130,6 +130,14 @@ architecture does not change.
   own growth rate on a slow clock (four real hours per simulated year, eased with a tanh so
   nothing runs away) and pays a yield every minute. Rich economies grow slowly and pay more.
   This one came from a player bug report.
+- **Orders** — limit and stop orders that fill on their own. Since `priceAt(asset, tick)` is
+  pure, a returning client replays every tick since the order was last checked and fills at the
+  exact tick the price crossed. No server, no polling, works with the tab closed.
+- **Leverage** — short selling (50% initial equity, 8%/yr borrow fee, buy-in below 25%
+  maintenance) and margin loans (up to 50% of collateral at policy rate + 3.5, liquidation
+  above 70%).
+- **Earnings** — every company reports on a fixed schedule derived from its seed; the surprise
+  is a hash of the quarter number, so it is decided in advance and revealed on the day.
 - **Players** — live net-worth leaderboard, presence (who is online now), trade tape, chat,
   and cash/asset transfers by username.
 - **Bug reports** — the "Report a bug" button files a report to the server for the developer

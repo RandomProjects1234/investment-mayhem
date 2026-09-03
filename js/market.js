@@ -4,7 +4,7 @@
 // plus one shared multiplayer term (net player flow, read from Firebase).
 // Because the tick index comes from wall-clock time, every browser in the world
 // draws the same chart without any server doing the simulating.
-import { fbm, hashF, clamp } from './rng.js?v=1.5';
+import { fbm, hashF, clamp } from './rng.js?v=1.6';
 
 export const TICK_MS = 3000;               // one market tick = 3 real seconds
 export const nowTick = () => Math.floor(Date.now() / TICK_MS);
@@ -42,6 +42,42 @@ const secSeed = id => {
 export function sectorFactor(sectorId, t) {
   const s = secSeed(sectorId);
   return fbm(s, t / 170, 3) * 0.13 + eventEffect(s ^ 0x7a5, t, 0.09, 0.26);
+}
+
+// ---- earnings ----------------------------------------------------------
+// Unlike the random shocks below, earnings are on a schedule you can see coming.
+// Each company reports every EARN_PERIOD ticks, offset by its own seed, and the
+// result is a hash of the quarter number: fixed in advance, revealed on the day.
+export const EARN_PERIOD = 900;          // ticks between reports, about 45 min
+
+export const earnOffset = asset => Math.abs(asset.seed % EARN_PERIOD);
+
+export function earningsQuarter(asset, t) {
+  return Math.floor((t - earnOffset(asset)) / EARN_PERIOD);
+}
+
+export function nextEarningsTick(asset, t) {
+  return (earningsQuarter(asset, t) + 1) * EARN_PERIOD + earnOffset(asset);
+}
+
+// How far the last few reports moved the price, decaying away.
+export function earningsSurprise(asset, q) {
+  return (hashF(asset.seed ^ 0xEA71, q) - 0.47) * 2;   // roughly -1..1
+}
+
+function earningsEffect(asset, t) {
+  const q0 = earningsQuarter(asset, t);
+  let sum = 0;
+  for (let i = 0; i < 3; i++) {
+    const q = q0 - i;
+    if (q < 0) continue;
+    const et = q * EARN_PERIOD + earnOffset(asset);
+    if (et > t) continue;
+    const age = t - et;
+    sum += earningsSurprise(asset, q) * asset.vol * 0.9 *
+      Math.exp(-age / 220) * (1 - Math.exp(-age / 3));
+  }
+  return sum;
 }
 
 // ---- discrete shock events --------------------------------------------
@@ -145,7 +181,8 @@ function rawPrice(asset, t) {
       + sectorFactor(asset.sector, t) * asset.secBeta
       + fbm(asset.seed, t / (45 / asset.speed), 4) * asset.vol * 0.45
       + fbm(asset.seed ^ 0x2f, t / (7 / asset.speed), 2) * asset.vol * 0.22
-      + eventEffect(asset.seed ^ 0x99, t, 0.045, 0.30);
+      + eventEffect(asset.seed ^ 0x99, t, 0.045, 0.30)
+      + earningsEffect(asset, t);
   } else if (asset.kind === 'alt') {
     logMul = marketFactor(t) * asset.beta
       + fbm(asset.seed, t / (70 / asset.speed), 5) * asset.vol

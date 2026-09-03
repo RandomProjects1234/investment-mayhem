@@ -1,8 +1,8 @@
 // Entry point: login screen, Firebase wiring, then hand off to the game loop.
-import * as G from './game.js?v=1.5';
-import * as Net from './net.js?v=1.5';
-import { UI } from './ui.js?v=1.5';
-import { setFlow } from './market.js?v=1.5';
+import * as G from './game.js?v=1.6';
+import * as Net from './net.js?v=1.6';
+import { UI } from './ui.js?v=1.6';
+import { setFlow, marketIndex, nowTick } from './market.js?v=1.6';
 
 const $ = s => document.querySelector(s);
 
@@ -98,6 +98,10 @@ async function start(online) {
   }
 
   G.state.name = name;
+  if (!G.state.startIndex) {
+    G.state.startIndex = marketIndex(nowTick());
+    G.state.startNetWorth = G.netWorth();
+  }
   $('#hdr-name').textContent = name;
   $('#setup').hidden = true;
   G.onTick(UI.refresh);

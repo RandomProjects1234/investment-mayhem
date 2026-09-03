@@ -283,4 +283,32 @@ h2 .mini{float:right;margin-top:-4px}
   .bankrow b{font-size:14px}
 }
 
+/* ---------- v1.6: orders, leverage, earnings ---------- */
+.orow{grid-template-columns:minmax(150px,2fr) 1.1fr .9fr .9fr .8fr 1fr 80px}
+.orderbar{align-items:center;margin-bottom:8px}
+.orderbar select{flex:0 0 auto}
+.orderbar input{flex:1;min-width:120px}
+.hint.inline{margin:0;flex:1 1 100%}
+.earnings{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;
+  scrollbar-width:none}
+.earnings::-webkit-scrollbar{display:none}
+.earn{flex:none;border:1px solid var(--line);background:#0e1521;border-radius:9px;
+  padding:6px 10px;font-size:12px;cursor:pointer;display:flex;gap:8px;align-items:baseline}
+.earn:hover{border-color:#33465e}
+.earn b{font-family:var(--mono)}
+.earn span{color:var(--dim);font-family:var(--mono);font-size:11px}
+.earn.soon{border-color:#5c4a1f;background:#241d0f}
+.shortline{display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:12px;
+  border-bottom:1px solid rgba(255,255,255,.05);font-family:var(--mono)}
+.shortline b{font-weight:600}
+.ordtag{font-size:10px;text-transform:uppercase;letter-spacing:.07em;padding:2px 7px;
+  border-radius:5px;border:1px solid var(--line)}
+.ordtag.buy{color:#8ff0c0;border-color:#255c43}
+.ordtag.sell{color:#ff8f9a;border-color:#6b2a33}
+@media(max-width:600px){
+  .orow{grid-template-columns:1.6fr 1fr 80px}
+  .orow>.c{display:none}
+  .orow>.c:nth-child(1),.orow>.c:nth-child(3),.orow>.c:nth-child(7){display:block}
+}
+
 [hidden]{display:none !important}

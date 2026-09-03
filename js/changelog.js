@@ -1,9 +1,24 @@
 // Release history and roadmap. Rendered in-game (click the version badge) and
 // mirrored in CHANGELOG.md / ROADMAP.md so the repo tells the same story.
 
-export const VERSION = 'v1.5';
+export const VERSION = 'v1.6';
 
 export const RELEASES = [
+  {
+    version: 'v1.6',
+    date: '2026-09-03',
+    title: 'Orders and leverage',
+    items: [
+      ['new', 'Limit and stop orders. Set a price and walk away. Because prices here are a pure function of time, coming back replays every tick you missed and fills at the exact tick the price crossed, even if the tab was closed the whole time.'],
+      ['new', 'An Orders tab showing everything working, what it is waiting for, what the price is now, and what cash is reserved against it, plus a history of fills.'],
+      ['new', 'Short selling on stocks, funds, crypto and countries. You borrow the units, sell them, and buy them back later. 50% equity to open, 8% a year to borrow, and a buy-in if the position runs away from you.'],
+      ['new', 'Margin loans. Borrow up to half your collateral at the policy rate plus 3.5, compounding every minute. Past 70% of collateral, positions are sold to pay it down whether you are watching or not.'],
+      ['new', 'An earnings calendar. Every company reports on a schedule you can see coming, the result is fixed in advance and revealed on the day, and the next report date sits in the company window.'],
+      ['new', 'Performance and leverage cards on the portfolio: return, return against the Mayhem Index, win rate, best and worst trade, debt, short exposure and borrow fees paid.'],
+      ['fix', 'A forced buy-in could spend cash you did not have and leave the balance deeply negative. It now sells your longs first, covers only what the cash allows, and says so plainly if it cannot finish.'],
+      ['bal', 'Orders reserve their cash while they wait, so a working order cannot be spent twice.'],
+    ],
+  },
   {
     version: 'v1.5',
     date: '2026-09-03',
@@ -100,28 +115,23 @@ export const RELEASES = [
 
 // What the next update is aiming at. Ordered by what would change the game most.
 export const NEXT = {
-  version: 'v1.6',
-  title: 'Orders and leverage',
+  version: 'v1.7',
+  title: 'Seasons and a fairer market',
   items: [
-    ['Limit and stop orders',
-     'Resting orders that fill when the price crosses them. The price curve is a pure function of time, so an order can be checked against every tick since you placed it and filled at the exact tick it triggered, even if you had the tab closed.'],
-    ['Short selling',
-     'Borrow shares, sell them, buy them back. Needs a borrow fee and a forced buy-in when a position runs away from you.'],
-    ['Margin and loans',
-     'Borrow against your portfolio at an interest rate tied to the policy rate that now exists, with a maintenance requirement and a real margin call.'],
-    ['An earnings calendar',
-     'Company shocks currently arrive unannounced. Scheduling them per company and showing the date turns news from weather into something you can trade ahead of.'],
-    ['Everything reported since v1.5',
-     'Reports are read before every release. The country market in v1.5 came from one; keep them coming through the Report a bug button and they get triaged here.'],
-    ['Portfolio analytics',
-     'Best and worst trade, per-sector exposure, return against the index rather than against zero.'],
+    ['Weekly seasons',
+     'The leaderboard resets on a schedule and past seasons are archived, so somebody joining on day nine still has something to win.'],
+    ['Server-authoritative trading',
+     'Move buy and sell into a Cloud Function so the leaderboard cannot be edited from the browser console. Nothing else about the architecture has to change.'],
+    ['Options',
+     'Simple calls and puts on the larger names, priced off the same curve the rest of the game already uses.'],
+    ['Property depth',
+     'Mortgages so you can lever a building, renovations that raise rent, and tenants who leave.'],
+    ['Everything reported since v1.6',
+     'Reports are read before every release and reported back. The country market in v1.5 came from one, so keep them coming through the Report a bug button.'],
   ],
   later: [
-    ['Server-authoritative trading',
-     'Move buy and sell into a Cloud Function so the leaderboard cannot be edited from the browser console. The rest of the architecture does not have to change.'],
-    ['Weekly seasons', 'The leaderboard resets on a schedule and past seasons are archived, so a player who joins late still has something to win.'],
-    ['Property depth', 'Mortgages, renovations that raise rent, and tenants who leave.'],
-    ['Options', 'Simple calls and puts on the larger names, priced off the same curve.'],
-    ['Mobile layout', 'The tables work on a phone, but they were designed for a wide screen.'],
+    ['Alerts', 'Tell the game to shout when something crosses a price, instead of you watching for it.'],
+    ['Trade history export', 'Take your fills away as a file.'],
+    ['Tutorial', 'A first-run walkthrough, because there is a lot here now.'],
   ],
 };

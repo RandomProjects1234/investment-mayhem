@@ -1,10 +1,22 @@
 # Changelog
 
-All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v1.5**.
+All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v1.6**.
 
 This file is generated from `js/changelog.js`, which is also what the in-game
 update log reads — click the version badge in the corner. Edit that file, then
 run `node tools/release.mjs`.
+
+## v1.6 — Orders and leverage
+*2026-09-03*
+
+- **New** — Limit and stop orders. Set a price and walk away. Because prices here are a pure function of time, coming back replays every tick you missed and fills at the exact tick the price crossed, even if the tab was closed the whole time.
+- **New** — An Orders tab showing everything working, what it is waiting for, what the price is now, and what cash is reserved against it, plus a history of fills.
+- **New** — Short selling on stocks, funds, crypto and countries. You borrow the units, sell them, and buy them back later. 50% equity to open, 8% a year to borrow, and a buy-in if the position runs away from you.
+- **New** — Margin loans. Borrow up to half your collateral at the policy rate plus 3.5, compounding every minute. Past 70% of collateral, positions are sold to pay it down whether you are watching or not.
+- **New** — An earnings calendar. Every company reports on a schedule you can see coming, the result is fixed in advance and revealed on the day, and the next report date sits in the company window.
+- **New** — Performance and leverage cards on the portfolio: return, return against the Mayhem Index, win rate, best and worst trade, debt, short exposure and borrow fees paid.
+- **Fix** — A forced buy-in could spend cash you did not have and leave the balance deeply negative. It now sells your longs first, covers only what the cash allows, and says so plainly if it cannot finish.
+- **Tuning** — Orders reserve their cash while they wait, so a working order cannot be spent twice.
 
 ## v1.5 — Countries, phones, and the first player report
 *2026-09-03*

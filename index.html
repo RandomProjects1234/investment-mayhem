@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Investment Mayhem — Multiplayer Investing Sim</title>
-<link rel="stylesheet" href="style.css?v=1.5">
+<link rel="stylesheet" href="style.css?v=1.6">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📈</text></svg>">
-<script src="firebase-config.js?v=1.5"></script>
+<script src="firebase-config.js?v=1.6"></script>
 </head>
 <body>
 
@@ -14,7 +14,7 @@
 <div id="setup" class="setup" hidden>
   <div class="setup-card">
     <h1>Investment Mayhem</h1>
-    <div class="ver-line">version <b>v1.5</b> &middot; <button id="cl-open" class="linkish inline">what's new</button></div>
+    <div class="ver-line">version <b>v1.6</b> &middot; <button id="cl-open" class="linkish inline">what's new</button></div>
     <p class="tag">A multiplayer market simulation. 624 real listed companies, 10 index funds,
        260 properties, crypto, commodities and angel deals — all on one shared clock.</p>
     <p class="disclaimer">Ticker symbols and company names are real; <b>every price in this game is
@@ -61,6 +61,7 @@
     <button class="tab" data-tab="alts">Alternatives</button>
     <button class="tab" data-tab="bank">Bank &amp; Bonds</button>
     <button class="tab" data-tab="countries">Countries</button>
+    <button class="tab" data-tab="orders">Orders</button>
     <button class="tab" data-tab="angel">Angel</button>
     <button class="tab" data-tab="social">Players</button>
   </nav>
@@ -89,6 +90,23 @@
           <div id="news" class="scroll"></div>
         </div>
       </div>
+      <div class="grid2">
+        <div class="card">
+          <h2>Performance</h2>
+          <div class="bankrow"><span>Return</span><b id="an-return">0%</b></div>
+          <div class="bankrow"><span>vs the Mayhem Index</span><b id="an-vs">0%</b></div>
+          <div class="bankrow"><span>Win rate</span><b id="an-win">-</b></div>
+          <div class="bankrow"><span>Best trade</span><b id="an-best">-</b></div>
+          <div class="bankrow"><span>Worst trade</span><b id="an-worst">-</b></div>
+        </div>
+        <div class="card">
+          <h2>Leverage</h2>
+          <div class="bankrow"><span>Margin debt</span><b id="an-debt">$0</b></div>
+          <div class="bankrow"><span>Short exposure</span><b id="an-short">$0</b></div>
+          <div class="bankrow"><span>Borrow fees paid</span><b id="an-borrowfee">$0</b></div>
+          <div id="short-list"></div>
+        </div>
+      </div>
       <div class="card">
         <h2>Positions</h2>
         <div class="row head hrow"><div class="c sym">Asset</div><div class="c num">Qty</div>
@@ -111,6 +129,7 @@
     <section class="panel" id="panel-stocks" hidden>
       <div class="card">
         <div id="sector-strip" class="strip"></div>
+        <div id="earnings-strip" class="earnings"></div>
         <div class="controls">
           <input id="f-search" placeholder="Search ticker or company">
           <select id="f-sector"><option value="all">All sectors</option></select>
@@ -194,6 +213,27 @@
         </div>
       </div>
       <div class="card">
+        <h2>Margin loan</h2>
+        <div class="grid2">
+          <div>
+            <div class="bankrow"><span>Rate</span><b id="loan-rate">0%</b></div>
+            <div class="bankrow"><span>Borrowed</span><b id="loan-principal">$0</b></div>
+            <div class="bankrow"><span>Borrowing power left</span><b id="loan-room">$0</b></div>
+            <div class="bankrow"><span>Collateral</span><b id="loan-collateral">$0</b></div>
+          </div>
+          <div>
+            <div class="form inline">
+              <input id="loan-amount" type="number" min="0" placeholder="Amount">
+              <button id="loan-borrow" class="primary mini">Borrow</button>
+              <button id="loan-repay" class="mini">Repay</button>
+            </div>
+            <p class="hint">You can borrow up to half of what you hold, at the policy rate plus
+              3.5. Interest compounds every minute. Let the debt pass 70% of your collateral and
+              positions get sold to pay it down, whether you are watching or not.</p>
+          </div>
+        </div>
+      </div>
+      <div class="card">
         <h2>Bonds</h2>
         <p class="hint">Each bond pays its coupon every minute and can be sold at any time for
           whatever it is worth once rates have moved.</p>
@@ -226,6 +266,25 @@
           <div class="c num">Growth</div><div class="c num">Yield</div><div class="c num">Change</div>
           <div class="c spark">Trend</div><div class="c num">Owned</div></div>
         <div id="country-body"></div>
+      </div>
+    </section>
+
+    <!-- orders -->
+    <section class="panel" id="panel-orders" hidden>
+      <div class="card">
+        <h2>Working orders</h2>
+        <p class="hint">Limit and stop orders fill on their own. Prices are a pure function of
+          time here, so when you come back the game replays every tick you missed and fills at
+          the exact moment the price crossed &mdash; even if the tab was closed. Place them from
+          any asset window.</p>
+        <div class="row head orow"><div class="c sym">Asset</div><div class="c tag">Order</div>
+          <div class="c num">Trigger</div><div class="c num">Now</div><div class="c num">Qty</div>
+          <div class="c num">Reserved</div><div class="c act"></div></div>
+        <div id="order-body"></div>
+      </div>
+      <div class="card">
+        <h2>Recently filled</h2>
+        <div id="order-history"></div>
       </div>
     </section>
 
@@ -287,6 +346,15 @@
     <div class="pricerow"><b id="m-price"></b><span id="m-change" class="m-change"></span></div>
     <canvas id="m-chart" height="220"></canvas>
     <div id="m-facts" class="facts"></div>
+    <div id="m-order" class="trade orderbar">
+      <select id="m-ordertype">
+        <option value="market">Market order</option>
+        <option value="limit">Limit</option>
+        <option value="stop">Stop</option>
+      </select>
+      <input id="m-trigger" type="number" step="any" min="0" placeholder="Trigger price" hidden>
+      <span id="m-orderhint" class="hint inline" hidden></span>
+    </div>
     <div id="m-trade" class="trade">
       <button id="m-mode" class="mini" title="Switch between quantity and dollar amount">Quantity</button>
       <input id="m-qty" type="number" step="any" min="0">
@@ -294,6 +362,11 @@
       <button id="m-all" class="mini">All owned</button>
       <button id="m-buy" class="primary">Buy</button>
       <button id="m-sell" class="danger">Sell</button>
+    </div>
+    <div id="m-short" class="trade">
+      <button id="m-shortbtn" class="danger">Short</button>
+      <button id="m-cover" class="mini">Cover</button>
+      <span id="m-shortinfo" class="hint inline"></span>
     </div>
     <div id="m-proptrade" class="trade" hidden>
       <button id="m-pbuy" class="primary">Buy property</button>
@@ -303,7 +376,7 @@
 </div>
 
 <button id="report-open" title="Report a bug">Report a bug</button>
-<button id="version" title="Update log">v1.5</button>
+<button id="version" title="Update log">v1.6</button>
 
 <!-- ---------------- bug report ---------------- -->
 <div id="report" hidden>
@@ -337,12 +410,12 @@
   <div class="sheet">
     <button id="cl-close" class="x">&times;</button>
     <h1 class="cl-h">Investment Mayhem</h1>
-    <div class="ver-line">update log &middot; <b id="cl-version">v1.5</b></div>
+    <div class="ver-line">update log &middot; <b id="cl-version">v1.6</b></div>
     <div id="cl-next"></div>
     <div id="cl-body"></div>
   </div>
 </div>
 <div id="toast" hidden></div>
-<script type="module" src="js/main.js?v=1.5"></script>
+<script type="module" src="js/main.js?v=1.6"></script>
 </body>
 </html>

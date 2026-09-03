@@ -1,14 +1,22 @@
 // Game state, rules and the main loop.
 import { generateCompanies, generateFunds, generateProperties, generateAlts,
          generateBonds, generateCollectibles, generateCountries, generateStartups, startupOutcome,
-         STARTUP_ROUND_TICKS, COLLECT_SPREAD, SECTORS } from './data.js?v=1.5';
-import { priceAt, priceNow, nowTick, TICK_MS, policyRate, setFlow } from './market.js?v=1.5';
-import * as Net from './net.js?v=1.5';
+         STARTUP_ROUND_TICKS, COLLECT_SPREAD, SECTORS } from './data.js?v=1.6';
+import { priceAt, priceNow, nowTick, TICK_MS, policyRate, setFlow } from './market.js?v=1.6';
+import * as Net from './net.js?v=1.6';
 
 export const FEE = 0.002;            // 0.2% trading commission
 export const PROP_CLOSING = 0.03;    // 3% closing cost on property purchase
 export const START_CASH = 100000;
 export const MAX_OFFLINE_MIN = 240;  // income accrues for at most 4 hours away
+export const SHORT_FEE = 8;          // % a year to borrow the units you short
+export const SHORT_INITIAL = 0.5;    // equity needed to open, as a share of the short
+export const SHORT_MAINT = 0.25;     // below this the position is bought in for you
+export const LOAN_SPREAD = 3.5;      // margin loan rate = policy rate + this
+export const LOAN_LTV = 0.5;         // you can borrow half your collateral
+export const LOAN_CALL = 0.7;        // above this share of collateral you get called
+export const MAX_ORDERS = 20;
+const ORDER_LOOKBACK = 3000;         // ticks of history an order can fill against
 
 // ---- universe (generated once) ----------------------------------------
 export const STOCKS = generateCompanies();
@@ -39,6 +47,12 @@ function blankState() {
     props: {},      // property id -> { price, bought, lastCollect }
     startups: {},   // startup id -> { name, amount, risk, matureTick, resolved, payout }
     savings: { balance: 0, last: Date.now() },
+    shorts: {},     // assetId -> { units, proceeds, opened }
+    orders: [],     // resting limit and stop orders
+    loan: { principal: 0, last: Date.now() },
+    trades: [],     // closed trades, newest first, for the analytics card
+    orderTick: 0,   // last tick the order book was checked against
+    startNetWorth: START_CASH, startIndex: 0,
     stats: { trades: 0, realized: 0, rentCollected: 0, dividends: 0, coupons: 0, interest: 0, sovereign: 0 },
     watch: {}, nwHistory: [],
     netWorth: START_CASH, lastDividend: Date.now(),
@@ -94,10 +108,14 @@ export function saveLocal() {
 // positions whose asset no longer exists so value can never vanish silently.
 export function migrate() {
   const blank = blankState();
-  for (const k of ['holdings', 'alts', 'bonds', 'collect', 'countries', 'props', 'startups', 'watch']) {
+  for (const k of ['holdings', 'alts', 'bonds', 'collect', 'countries', 'props', 'startups', 'watch', 'shorts']) {
     if (!state[k] || typeof state[k] !== 'object') state[k] = {};
   }
   if (!Array.isArray(state.nwHistory)) state.nwHistory = [];
+  if (!Array.isArray(state.orders)) state.orders = [];
+  if (!Array.isArray(state.trades)) state.trades = [];
+  if (!state.loan || typeof state.loan.principal !== 'number') state.loan = { principal: 0, last: Date.now() };
+  if (!state.startNetWorth) state.startNetWorth = state.netWorth || START_CASH;
   if (!Array.isArray(state.log)) state.log = [];
   if (!state.savings || typeof state.savings.balance !== 'number') state.savings = { balance: 0, last: Date.now() };
   state.stats = Object.assign(blank.stats, state.stats || {});
@@ -156,6 +174,12 @@ export function adopt(remote) {
   state.bonds = remote.bonds || {};
   state.collect = remote.collect || {};
   state.countries = remote.countries || {};
+  state.shorts = remote.shorts || {};
+  state.orders = Array.isArray(remote.orders) ? remote.orders : [];
+  state.loan = remote.loan || state.loan;
+  state.trades = Array.isArray(remote.trades) ? remote.trades : state.trades;
+  state.startNetWorth = remote.startNetWorth || state.startNetWorth;
+  state.startIndex = remote.startIndex || state.startIndex;
   state.props = remote.props || {};
   state.startups = remote.startups || {};
   state.savings = remote.savings || state.savings;
@@ -191,9 +215,30 @@ export function positionsValue() {
   const collect = bookValue(state.collect) * (1 - COLLECT_SPREAD);  // valued at what you could get
   const countries = bookValue(state.countries);
   const savings = state.savings.balance;
+  const shortLiability = shortsValue();
+  const debt = state.loan.principal || 0;
+  const gross = stocks + property + alt + bonds + collect + countries + angel + savings;
   return { stocks, property, alt, bonds, collect, countries, angel, savings,
-           total: stocks + property + alt + bonds + collect + countries + angel + savings };
+           shortLiability, debt, gross, total: gross - shortLiability - debt };
 }
+
+// What it would cost right now to buy back everything you are short.
+export function shortsValue() {
+  let total = 0;
+  for (const id in state.shorts) {
+    const a = ASSETS.get(id); if (!a) continue;
+    total += state.shorts[id].units * priceNow(a);
+  }
+  return total;
+}
+
+// Everything a lender would count as collateral: cash plus long positions.
+export function collateral() {
+  const v = positionsValue();
+  return state.cash + v.gross;
+}
+export const maxLoan = () => Math.max(0, collateral() * LOAN_LTV);
+export const loanRate = () => rateNow() + LOAN_SPREAD;
 
 export function netWorth() {
   // Rounding can leave cash at -1e-12 after a trade. The security rules require
@@ -221,6 +266,11 @@ function log(text, good) {
   if (state.log.length > 60) state.log.length = 60;
 }
 export const getLog = () => state.log;
+
+function recordTrade(sym, pl, kind) {
+  state.trades.unshift({ sym, pl: Math.round(pl * 100) / 100, kind, ts: Date.now() });
+  if (state.trades.length > 60) state.trades.length = 60;
+}
 
 export function buy(assetId, units) {
   const a = ASSETS.get(assetId);
@@ -269,6 +319,7 @@ export function sell(assetId, units) {
   state.cash += gross;
   state.stats.trades++;
   state.stats.realized += gross - basis;
+  recordTrade(a.ticker, gross - basis, 'sell');
   Net.bumpFlow(assetId, -units);
   Net.postFeed({ act: 'sell', sym: a.ticker, units, px: +px.toFixed(4), name: state.name });
   log('Sold ' + fmtUnits(units) + ' ' + a.ticker + ' @ ' + fmt(px) +
@@ -324,6 +375,277 @@ export function collectRent(only) {
     saveLocal();
   }
   return total;
+}
+
+// ---- resting orders ----------------------------------------------------
+// Because price is a pure function of the tick, an order does not need a server
+// or a live tab: when the game next runs it replays every tick since the order
+// was last checked and fills at the exact tick the price crossed.
+function orderTriggers(o, px) {
+  if (o.side === 'buy') return o.type === 'limit' ? px <= o.price : px >= o.price;
+  return o.type === 'limit' ? px >= o.price : px <= o.price;
+}
+
+export function placeOrder({ assetId, side, type, price, units }) {
+  const a = ASSETS.get(assetId);
+  if (!a) return { ok: false, msg: 'Unknown asset.' };
+  if (!bookOf(a).book) return { ok: false, msg: 'That asset cannot be traded on an order.' };
+  if (!(price > 0)) return { ok: false, msg: 'Enter a trigger price.' };
+  if (!(units > 0)) return { ok: false, msg: 'Enter a quantity.' };
+  if (!isFractional(a)) units = Math.floor(units);
+  if (!(units > 0)) return { ok: false, msg: 'That is less than one unit.' };
+  if (state.orders.filter(o => o.status === 'open').length >= MAX_ORDERS) {
+    return { ok: false, msg: 'You already have ' + MAX_ORDERS + ' orders working.' };
+  }
+  const px = priceNow(a);
+  if (side === 'buy' && type === 'limit' && price >= px) return { ok: false, msg: 'A buy limit has to sit below the current price.' };
+  if (side === 'buy' && type === 'stop' && price <= px) return { ok: false, msg: 'A buy stop has to sit above the current price.' };
+  if (side === 'sell' && type === 'limit' && price <= px) return { ok: false, msg: 'A sell limit has to sit above the current price.' };
+  if (side === 'sell' && type === 'stop' && price >= px) return { ok: false, msg: 'A sell stop has to sit below the current price.' };
+
+  let reserved = 0;
+  if (side === 'buy') {
+    // Hold the cash so a working order cannot be spent twice.
+    reserved = price * units * (1 + FEE) * 1.02;
+    if (reserved > state.cash) return { ok: false, msg: 'Not enough cash to reserve ' + fmt(reserved) + '.' };
+    state.cash -= reserved;
+  } else {
+    const { book, key } = bookOf(a);
+    const owned = book[assetId] ? book[assetId][key] : 0;
+    if (units > owned + 1e-9) return { ok: false, msg: 'You only own ' + fmtUnits(owned) + '.' };
+  }
+  state.orders.unshift({
+    id: 'o' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+    assetId, side, type, price, units, reserved,
+    placed: Date.now(), placedTick: nowTick(), status: 'open',
+  });
+  log('Placed ' + side + ' ' + type + ' for ' + fmtUnits(units) + ' ' + a.ticker + ' at ' + fmtPx(price), true);
+  saveLocal();
+  return { ok: true, msg: side + ' ' + type + ' order working' };
+}
+
+export function cancelOrder(id) {
+  const o = state.orders.find(x => x.id === id && x.status === 'open');
+  if (!o) return { ok: false, msg: 'That order is not working.' };
+  o.status = 'cancelled';
+  if (o.reserved) { state.cash += o.reserved; o.reserved = 0; }
+  const a = ASSETS.get(o.assetId);
+  log('Cancelled ' + o.side + ' order on ' + (a ? a.ticker : o.assetId), false);
+  saveLocal();
+  return { ok: true, msg: 'Order cancelled' };
+}
+
+export const openOrders = () => state.orders.filter(o => o.status === 'open');
+
+function fillOrder(o, tick, px) {
+  const a = ASSETS.get(o.assetId);
+  const { book, key } = bookOf(a);
+  o.status = 'filled'; o.filledTick = tick; o.filledPrice = px; o.filled = Date.now();
+
+  if (o.side === 'buy') {
+    const cost = px * o.units * (1 + FEE);
+    state.cash += o.reserved; o.reserved = 0;
+    if (cost > state.cash) {
+      o.status = 'cancelled';
+      log('Order on ' + a.ticker + ' expired: not enough cash at the fill', false);
+      return;
+    }
+    state.cash -= cost;
+    const pos = book[o.assetId] || { [key]: 0, cost: 0 };
+    pos[key] += o.units; pos.cost += cost;
+    book[o.assetId] = pos;
+    log(o.type + ' buy filled: ' + fmtUnits(o.units) + ' ' + a.ticker + ' at ' + fmtPx(px), true);
+  } else {
+    const pos = book[o.assetId];
+    const units = Math.min(o.units, pos ? pos[key] : 0);
+    if (!(units > 0)) {
+      o.status = 'cancelled';
+      log('Order on ' + a.ticker + ' expired: nothing left to sell', false);
+      return;
+    }
+    const gross = px * units * (1 - FEE) * (1 - spreadOf(a));
+    const basis = pos.cost * (units / pos[key]);
+    pos.cost -= basis; pos[key] -= units;
+    if (pos[key] <= 1e-9) delete book[o.assetId];
+    state.cash += gross;
+    state.stats.realized += gross - basis;
+    recordTrade(a.ticker, gross - basis, 'sell');
+    log(o.type + ' sell filled: ' + fmtUnits(units) + ' ' + a.ticker + ' at ' + fmtPx(px), gross >= basis);
+  }
+  state.stats.trades++;
+  Net.bumpFlow(o.assetId, o.side === 'buy' ? o.units : -o.units);
+}
+
+function checkOrders() {
+  const t = nowTick();
+  const working = openOrders();
+  if (!working.length) { state.orderTick = t; return; }
+  const from = Math.max(state.orderTick || t - 1, t - ORDER_LOOKBACK);
+  for (const o of working) {
+    const a = ASSETS.get(o.assetId);
+    if (!a) { o.status = 'cancelled'; continue; }
+    for (let tick = from + 1; tick <= t; tick++) {
+      const px = priceAt(a, tick);
+      if (orderTriggers(o, px)) { fillOrder(o, tick, px); break; }
+    }
+  }
+  state.orderTick = t;
+}
+
+// ---- short selling -----------------------------------------------------
+export function canShort(a) {
+  return !!a && (a.kind === 'stock' || a.kind === 'fund' || a.kind === 'alt' || a.kind === 'country');
+}
+
+export function openShort(assetId, units) {
+  const a = ASSETS.get(assetId);
+  if (!canShort(a)) return { ok: false, msg: 'You can only short stocks, funds, crypto and countries.' };
+  if (!(units > 0)) return { ok: false, msg: 'Enter a quantity.' };
+  if (!isFractional(a)) units = Math.floor(units);
+  if (!(units > 0)) return { ok: false, msg: 'That is less than one unit.' };
+  const px = priceNow(a);
+  const notional = px * units;
+  const equity = netWorth();
+  if (notional * SHORT_INITIAL > equity) {
+    return { ok: false, msg: 'You need ' + fmt(notional * SHORT_INITIAL) + ' of equity to short that much.' };
+  }
+  const proceeds = notional * (1 - FEE);
+  state.cash += proceeds;
+  const pos = state.shorts[assetId] || { units: 0, proceeds: 0, opened: Date.now() };
+  pos.units += units; pos.proceeds += proceeds;
+  state.shorts[assetId] = pos;
+  state.stats.trades++;
+  Net.bumpFlow(assetId, -units);
+  Net.postFeed({ act: 'sell', sym: a.ticker, units, px: +px.toFixed(4), name: state.name });
+  log('Shorted ' + fmtUnits(units) + ' ' + a.ticker + ' at ' + fmtPx(px), true);
+  saveLocal();
+  return { ok: true, msg: 'Shorted ' + fmtUnits(units) + ' ' + a.ticker + ' for ' + fmt(proceeds) };
+}
+
+export function coverShort(assetId, units, forced) {
+  const a = ASSETS.get(assetId);
+  const pos = state.shorts[assetId];
+  if (!a || !pos) return { ok: false, msg: 'You are not short that.' };
+  if (!(units > 0)) return { ok: false, msg: 'Enter a quantity.' };
+  units = Math.min(units, pos.units);
+  const px = priceNow(a);
+  let cost = px * units * (1 + FEE);
+  if (cost > state.cash) {
+    if (!forced) return { ok: false, msg: 'Not enough cash to buy back (need ' + fmt(cost) + ').' };
+    // A buy-in can only buy what the cash covers. The rest stays short and the
+    // caller keeps liquidating.
+    units = Math.min(units, state.cash / (px * (1 + FEE)));
+    if (!isFractional(a)) units = Math.floor(units);
+    if (!(units > 0)) return { ok: false, msg: 'No cash left to buy in with.' };
+    cost = px * units * (1 + FEE);
+  }
+  const share = units / pos.units;
+  const proceedsShare = pos.proceeds * share;
+  state.cash -= cost;
+  pos.units -= units; pos.proceeds -= proceedsShare;
+  if (pos.units <= 1e-9) delete state.shorts[assetId];
+  const pl = proceedsShare - cost;
+  state.stats.realized += pl;
+  state.stats.trades++;
+  recordTrade(a.ticker, pl, 'short');
+  Net.bumpFlow(assetId, units);
+  log((forced ? 'Bought in ' : 'Covered ') + fmtUnits(units) + ' ' + a.ticker + ' at ' + fmtPx(px) +
+      ' (' + (pl >= 0 ? '+' : '') + fmt(pl) + ')', pl >= 0);
+  saveLocal();
+  return { ok: true, msg: 'Covered for ' + fmt(cost) + ' (' + (pl >= 0 ? '+' : '') + fmt(pl) + ')' };
+}
+
+// ---- margin loan -------------------------------------------------------
+export function borrow(amount) {
+  if (!(amount > 0)) return { ok: false, msg: 'Enter an amount.' };
+  accrueLoan();
+  const room = maxLoan() - state.loan.principal;
+  if (amount > room) return { ok: false, msg: 'You can borrow at most ' + fmt(Math.max(0, room)) + ' against what you hold.' };
+  state.loan.principal += amount;
+  state.cash += amount;
+  log('Borrowed ' + fmt(amount) + ' on margin at ' + loanRate().toFixed(2) + '%', true);
+  saveLocal();
+  return { ok: true, msg: 'Borrowed ' + fmt(amount) };
+}
+
+export function repay(amount) {
+  accrueLoan();
+  if (!(amount > 0)) return { ok: false, msg: 'Enter an amount.' };
+  amount = Math.min(amount, state.loan.principal, state.cash);
+  if (!(amount > 0)) return { ok: false, msg: 'Nothing to repay, or no cash to repay it with.' };
+  state.loan.principal -= amount;
+  state.cash -= amount;
+  log('Repaid ' + fmt(amount) + ' of margin debt', true);
+  saveLocal();
+  return { ok: true, msg: 'Repaid ' + fmt(amount) };
+}
+
+function accrueLoan() {
+  const now = Date.now();
+  const minutes = Math.min(MAX_OFFLINE_MIN, (now - (state.loan.last || now)) / 60000);
+  state.loan.last = now;
+  if (!(state.loan.principal > 0) || minutes <= 0) return;
+  state.loan.principal += state.loan.principal * (loanRate() / 100) * (minutes / 52);
+}
+
+// Margin calls. Debt gets liquidated down; a runaway short gets bought in.
+function marginCalls() {
+  const col = collateral();
+  if (col > 0 && state.loan.principal > col * LOAN_CALL) {
+    log('Margin call: your debt outgrew your collateral', false);
+    let guard = 40;
+    while (state.loan.principal > collateral() * LOAN_LTV && guard-- > 0) {
+      if (!liquidateLargest()) break;
+      const pay = Math.min(state.cash, state.loan.principal);
+      if (pay > 0) { state.loan.principal -= pay; state.cash -= pay; }
+    }
+  }
+  const liability = shortsValue();
+  if (liability > 0 && netWorth() < liability * SHORT_MAINT) {
+    log('Margin call: your short position ran away', false);
+    forceBuyIn();
+  }
+}
+
+// Buying in a short you cannot afford: sell longs to raise the cash, then cover
+// as much as the cash allows, and keep going until the position is closed or
+// there is nothing left to sell.
+function forceBuyIn() {
+  for (const id of Object.keys(state.shorts)) {
+    let guard = 40;
+    while (state.shorts[id] && guard-- > 0) {
+      const a = ASSETS.get(id);
+      if (!a) { delete state.shorts[id]; break; }
+      const pos = state.shorts[id];
+      const needed = pos.units * priceNow(a) * (1 + FEE);
+      if (needed <= state.cash) { coverShort(id, pos.units, true); break; }
+      if (!liquidateLargest()) {
+        // Nothing left to sell. Cover whatever the remaining cash buys.
+        const res = coverShort(id, pos.units, true);
+        if (!res.ok) {
+          log('Could not fully buy in ' + a.ticker + ': you are out of cash and assets', false);
+        }
+        break;
+      }
+    }
+  }
+}
+
+// Sell the biggest liquid position to raise cash during a margin call.
+function liquidateLargest() {
+  let best = null;
+  for (const bookName of ['holdings', 'alts', 'bonds', 'countries', 'collect']) {
+    for (const id in state[bookName]) {
+      const a = ASSETS.get(id); if (!a) continue;
+      const p = state[bookName][id];
+      const q = p.shares != null ? p.shares : p.units;
+      const val = q * priceNow(a);
+      if (!best || val > best.val) best = { id, val, q };
+    }
+  }
+  if (!best) return false;
+  sell(best.id, best.q);
+  return true;
 }
 
 // ---- savings account ---------------------------------------------------
@@ -424,6 +746,17 @@ function payIncome() {
     sovereign += state.countries[id].units * priceNow(a) * (a.yield / 100) * (minutes / 52);
   }
   accrueInterest();
+  accrueLoan();
+
+  let borrowCost = 0;
+  for (const id in state.shorts) {
+    const a = ASSETS.get(id); if (!a) continue;
+    borrowCost += state.shorts[id].units * priceNow(a) * (SHORT_FEE / 100) * (minutes / 52);
+  }
+  if (borrowCost > 0.01) {
+    state.cash -= borrowCost;
+    state.stats.borrowFees = (state.stats.borrowFees || 0) + borrowCost;
+  }
 
   if (divs > 0.01) { state.cash += divs; state.stats.dividends += divs; }
   if (coupons > 0.01) { state.cash += coupons; state.stats.coupons += coupons; }
@@ -512,7 +845,9 @@ export function saveNow() {
 export function startLoop() {
   const step = () => {
     resolveStartups();
+    checkOrders();
     payIncome();
+    marginCalls();
     netWorth();
     sampleNetWorth();
     onTickCb();
