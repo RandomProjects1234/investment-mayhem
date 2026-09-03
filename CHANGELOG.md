@@ -1,10 +1,18 @@
 # Changelog
 
-All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v1.7**.
+All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v1.8**.
 
 This file is generated from `js/changelog.js`, which is also what the in-game
 update log reads — click the version badge in the corner. Edit that file, then
 run `node tools/release.mjs`.
+
+## v1.8 — The report button actually works now
+*2026-09-03*
+
+- **Fix** — Reports sent while playing solo never left your device. The button said it had saved them and pointed at GitHub, which is not the same as sending them, and solo is what most people are in. Reports now go straight to the developer from solo too, over a quiet connection that never touches your save, your presence or the leaderboard.
+- **Fix** — Anything that got stranded on your device is sent automatically the next time you open the report box, and the box now lists your own reports with a sent or pending marker so you can see for yourself.
+- **Fix** — The GitHub fallback link was long enough to get truncated, which cut the attached details off the end of a real report. The browser string is gone and the details are trimmed.
+- **New** — Two reports that had come in through the GitHub link have now been read and answered: a champions league investing market from theasoltani-afk, which is being built next, and the country market from Yesman, which shipped in v1.5.
 
 ## v1.7 — Seasons, options and mortgages
 *2026-09-03*

@@ -1,11 +1,11 @@
 // Game state, rules and the main loop.
 import { generateCompanies, generateFunds, generateProperties, generateAlts,
          generateBonds, generateCollectibles, generateCountries, generateStartups, startupOutcome,
-         STARTUP_ROUND_TICKS, COLLECT_SPREAD, SECTORS } from './data.js?v=1.7';
+         STARTUP_ROUND_TICKS, COLLECT_SPREAD, SECTORS } from './data.js?v=1.8';
 import { priceAt, priceNow, nowTick, TICK_MS, policyRate, setFlow,
          quoteOption, nextExpiries, strikeLadder, realisedVol,
-         isVacant, occupiedFraction } from './market.js?v=1.7';
-import * as Net from './net.js?v=1.7';
+         isVacant, occupiedFraction } from './market.js?v=1.8';
+import * as Net from './net.js?v=1.8';
 
 export const FEE = 0.002;            // 0.2% trading commission
 export const PROP_CLOSING = 0.03;    // 3% closing cost on property purchase

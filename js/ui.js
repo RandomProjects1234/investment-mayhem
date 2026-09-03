@@ -1,12 +1,12 @@
 // All DOM rendering. Rows are built once per filter change and only their
 // number cells are rewritten on each tick, so 640 stocks stay smooth.
-import * as G from './game.js?v=1.7';
+import * as G from './game.js?v=1.8';
 import { priceNow, priceAt, changePct, history, nowTick, marketIndex,
          recentEvents, flowOf, flowImpact, policyRate, bondYield,
-         nextEarningsTick, earningsQuarter, earningsSurprise, isVacant } from './market.js?v=1.7';
-import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=1.7';
-import * as Net from './net.js?v=1.7';
-import { RELEASES, NEXT, VERSION } from './changelog.js?v=1.7';
+         nextEarningsTick, earningsQuarter, earningsSurprise, isVacant } from './market.js?v=1.8';
+import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=1.8';
+import * as Net from './net.js?v=1.8';
+import { RELEASES, NEXT, VERSION } from './changelog.js?v=1.8';
 
 const $ = s => document.querySelector(s);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -734,13 +734,61 @@ const REPO = 'https://github.com/RandomProjects1234/investment-mayhem';
 
 function buildReport() {
   const box = $('#report');
-  const open = () => { $('#report-status').textContent = ''; box.hidden = false; syncGithubLink(); };
+  const open = () => {
+    $('#report-status').textContent = '';
+    box.hidden = false;
+    syncGithubLink();
+    renderMyReports();
+    flushReports().catch(() => {});
+  };
   $('#report-open').addEventListener('click', open);
   $('#report-close').addEventListener('click', () => { box.hidden = true; });
   box.addEventListener('click', e => { if (e.target.id === 'report') box.hidden = true; });
   ['#report-title', '#report-body', '#report-kind', '#report-attach']
     .forEach(sel => $(sel).addEventListener('input', syncGithubLink));
   $('#report-send').addEventListener('click', sendReport);
+}
+
+const REPORTS_KEY = 'is_reports';
+const loadReports = () => { try { return JSON.parse(localStorage.getItem(REPORTS_KEY) || '[]'); } catch (e) { return []; } };
+const saveReports = list => { try { localStorage.setItem(REPORTS_KEY, JSON.stringify(list.slice(0, 30))); } catch (e) {} };
+
+// Anything that never made it off the device gets another go, every time the
+// dialog opens. Reports used to be stranded here whenever you played solo.
+async function flushReports() {
+  const list = loadReports();
+  const pending = list.filter(r => !r.sent);
+  if (!pending.length) { renderMyReports(); return; }
+  let sent = 0;
+  for (const r of pending) {
+    try {
+      await Net.submitReport({ kind: r.kind, title: r.title, body: r.body, context: r.context || '' });
+      r.sent = true; sent++;
+    } catch (e) { break; }
+  }
+  const fresh = loadReports();
+  for (const r of fresh) {
+    const done = list.find(x => x.ts === r.ts && x.title === r.title && x.sent);
+    if (done) r.sent = true;
+  }
+  saveReports(fresh);
+  if (sent) $('#report-status').textContent = 'Sent ' + sent + ' report' + (sent === 1 ? '' : 's') +
+    ' that had been stuck on this device.';
+  renderMyReports();
+}
+
+function renderMyReports() {
+  const box = $('#report-mine');
+  if (!box) return;
+  const list = loadReports();
+  box.innerHTML = '';
+  if (!list.length) return;
+  box.appendChild(el('div', 'hint', 'Reports you have filed from this device:'));
+  for (const r of list.slice(0, 8)) {
+    const d = el('div', 'logline ' + (r.sent ? 'up' : 'down'));
+    d.textContent = (r.sent ? 'sent  ' : 'pending  ') + r.title;
+    box.appendChild(d);
+  }
 }
 
 function reportContext() {
@@ -755,7 +803,6 @@ function reportContext() {
       Object.keys(G.state.collect).length + ' collectible, ' +
       Object.keys(G.state.props).length + ' property',
     'screen: ' + window.innerWidth + 'x' + window.innerHeight,
-    'agent: ' + navigator.userAgent,
   ].join('\n');
 }
 
@@ -778,25 +825,25 @@ async function sendReport() {
     kind: $('#report-kind').value, title: title.slice(0, 90), body: body.slice(0, 1500),
     context: $('#report-attach').checked ? reportContext() : '',
   };
-  // Keep a local copy either way, so nothing is lost if the send fails.
-  try {
-    const mine = JSON.parse(localStorage.getItem('is_reports') || '[]');
-    mine.unshift({ ...report, ts: Date.now(), sent: Net.Net.online });
-    localStorage.setItem('is_reports', JSON.stringify(mine.slice(0, 30)));
-  } catch (e) { /* ignore */ }
+  const list = loadReports();
+  const entry = { ...report, ts: Date.now(), sent: false };
+  list.unshift(entry);
+  saveReports(list);
 
-  if (!Net.Net.online) {
-    status.textContent = 'Saved on this device. Solo mode has nowhere to send it, so use ' +
-      'the GitHub link to file it where the developer will see it.';
-    return;
-  }
+  status.textContent = 'Sending...';
   try {
     await Net.submitReport(report);
-    status.textContent = 'Sent. Thank you - reports are read before every update.';
+    entry.sent = true;
+    saveReports(list);
+    status.textContent = 'Sent. Reports are read before every update, and the reply shows up in the update log.';
     $('#report-title').value = ''; $('#report-body').value = '';
   } catch (e) {
-    status.textContent = 'Could not send it (' + e.message + '). The GitHub link still works.';
+    status.textContent = 'Could not reach the server (' + e.message +
+      '). It is saved here and will send itself next time you open this box. ' +
+      'The GitHub link works right now if you would rather not wait.';
   }
+  await flushReports().catch(() => {});
+  renderMyReports();
 }
 
 // ---------------- property ----------------

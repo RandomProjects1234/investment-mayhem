@@ -262,11 +262,32 @@ export function watchPresence(cb) {
 // ---- bug reports -------------------------------------------------------
 // Players file reports from inside the game; they land in /reports where the
 // developer can read them. Write-only for everyone but the report's author.
+// A report has to reach the developer whether or not you are playing online.
+// Solo players get a second, quiet Firebase connection used only for this: it
+// never touches your save, your presence or the leaderboard.
+let reporter = null;
+
+async function reporterLink() {
+  if (Net.online) return { fb: Net._fb, db: Net._db, uid: Net.uid };
+  if (reporter) return reporter;
+  const cfg = loadConfig();
+  if (!cfg) throw new Error('no server configured');
+  const [app, auth, db] = await Promise.all([
+    import(CDN + 'firebase-app.js'),
+    import(CDN + 'firebase-auth.js'),
+    import(CDN + 'firebase-database.js'),
+  ]);
+  const appInst = app.initializeApp(cfg, 'reporter');
+  const cred = await auth.signInAnonymously(auth.getAuth(appInst));
+  reporter = { fb: { ...app, ...auth, ...db }, db: db.getDatabase(appInst), uid: cred.user.uid };
+  return reporter;
+}
+
 export async function submitReport(report) {
-  if (!Net.online) throw new Error('offline');
-  const { push, set } = Net._fb;
-  await set(push(R('reports')), {
-    ...report, uid: Net.uid, name: Net.name || 'anon', ts: Date.now(),
+  const link = await reporterLink();
+  const { push, set, ref } = link.fb;
+  await set(push(ref(link.db, 'reports')), {
+    ...report, uid: link.uid, name: Net.name || report.name || 'anon', ts: Date.now(),
   });
 }
 

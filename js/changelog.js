@@ -1,9 +1,20 @@
 // Release history and roadmap. Rendered in-game (click the version badge) and
 // mirrored in CHANGELOG.md / ROADMAP.md so the repo tells the same story.
 
-export const VERSION = 'v1.7';
+export const VERSION = 'v1.8';
 
 export const RELEASES = [
+  {
+    version: 'v1.8',
+    date: '2026-09-03',
+    title: 'The report button actually works now',
+    items: [
+      ['fix', 'Reports sent while playing solo never left your device. The button said it had saved them and pointed at GitHub, which is not the same as sending them, and solo is what most people are in. Reports now go straight to the developer from solo too, over a quiet connection that never touches your save, your presence or the leaderboard.'],
+      ['fix', 'Anything that got stranded on your device is sent automatically the next time you open the report box, and the box now lists your own reports with a sent or pending marker so you can see for yourself.'],
+      ['fix', 'The GitHub fallback link was long enough to get truncated, which cut the attached details off the end of a real report. The browser string is gone and the details are trimmed.'],
+      ['new', 'Two reports that had come in through the GitHub link have now been read and answered: a champions league investing market from theasoltani-afk, which is being built next, and the country market from Yesman, which shipped in v1.5.'],
+    ],
+  },
   {
     version: 'v1.7',
     date: '2026-09-03',
@@ -130,24 +141,22 @@ export const RELEASES = [
 
 // What the next update is aiming at. Ordered by what would change the game most.
 export const NEXT = {
-  version: 'v1.8',
-  title: 'Alerts and a smoother first hour',
+  version: 'v1.9',
+  title: 'The cup',
   items: [
+    ['Champions league investing',
+     'Asked for by theasoltani-afk: back teams to score the most goals, to reach a final, and to win the thing, with the rounds simulated. A 32 team knockout, a new edition every few hours, and odds set from team strength.'],
+    ['A result nobody can look up in advance',
+     'Every price here is a function of time, so a player reading the source could work out a match before betting on it. Each round will instead be settled from a seed written to the database at kickoff, which cannot be overwritten once it exists. The cost is that cup betting needs an online server, and the game will say so rather than quietly taking a solo bet.'],
     ['Price alerts',
-     'Tell the game to shout when something crosses a level, instead of you sitting and watching for it. The order engine already replays missed ticks, so an alert can tell you what happened while you were away.'],
+     'Tell the game to shout when something crosses a level. The order engine already replays the ticks you missed, so an alert can tell you what happened while you were away.'],
     ['A first run walkthrough',
-     'There is a lot here now: stocks, funds, property, bonds, savings, collectibles, countries, angel deals, orders, shorts, margin and options. A new player deserves a guided first ten minutes.'],
-    ['Trade history you can take with you',
-     'Export your fills, so a season can be argued about properly.'],
-    ['Sector and country detail pages',
-     'A page per sector and per country, with its members, its news and how it has moved.'],
-    ['Everything reported since v1.7',
-     'Reports are read before every release and reported back to the developer. The country market came from one. Keep them coming through the Report a bug button.'],
+     'There is a lot in here now. A new player deserves a guided first ten minutes.'],
   ],
   later: [
     ['Server-authoritative trading',
-     'The honest fix for cheating: run buy and sell inside a Cloud Function so a browser cannot invent a net worth. It needs Firebase on the paid Blaze plan, so it is a decision to make rather than a thing to code.'],
-    ['Dividend reinvestment', 'Let income buy more of what paid it, automatically.'],
-    ['Bots', 'A few simulated traders so a quiet server still has a market and a leaderboard worth beating.'],
+     'The honest fix for cheating: run buy and sell inside a Cloud Function so a browser cannot invent a net worth. It needs Firebase on the paid plan, so it is a decision to make rather than a thing to code.'],
+    ['Trade history export', 'Take your fills away as a file.'],
+    ['Bots', 'A few simulated traders so a quiet server still has a market worth beating.'],
   ],
 };

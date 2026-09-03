@@ -1,32 +1,28 @@
 # Roadmap
 
-## Next up — v1.8: Alerts and a smoother first hour
+## Next up — v1.9: The cup
+
+### Champions league investing
+
+Asked for by theasoltani-afk: back teams to score the most goals, to reach a final, and to win the thing, with the rounds simulated. A 32 team knockout, a new edition every few hours, and odds set from team strength.
+
+### A result nobody can look up in advance
+
+Every price here is a function of time, so a player reading the source could work out a match before betting on it. Each round will instead be settled from a seed written to the database at kickoff, which cannot be overwritten once it exists. The cost is that cup betting needs an online server, and the game will say so rather than quietly taking a solo bet.
 
 ### Price alerts
 
-Tell the game to shout when something crosses a level, instead of you sitting and watching for it. The order engine already replays missed ticks, so an alert can tell you what happened while you were away.
+Tell the game to shout when something crosses a level. The order engine already replays the ticks you missed, so an alert can tell you what happened while you were away.
 
 ### A first run walkthrough
 
-There is a lot here now: stocks, funds, property, bonds, savings, collectibles, countries, angel deals, orders, shorts, margin and options. A new player deserves a guided first ten minutes.
-
-### Trade history you can take with you
-
-Export your fills, so a season can be argued about properly.
-
-### Sector and country detail pages
-
-A page per sector and per country, with its members, its news and how it has moved.
-
-### Everything reported since v1.7
-
-Reports are read before every release and reported back to the developer. The country market came from one. Keep them coming through the Report a bug button.
+There is a lot in here now. A new player deserves a guided first ten minutes.
 
 ## Further out
 
-- **Server-authoritative trading** — The honest fix for cheating: run buy and sell inside a Cloud Function so a browser cannot invent a net worth. It needs Firebase on the paid Blaze plan, so it is a decision to make rather than a thing to code.
-- **Dividend reinvestment** — Let income buy more of what paid it, automatically.
-- **Bots** — A few simulated traders so a quiet server still has a market and a leaderboard worth beating.
+- **Server-authoritative trading** — The honest fix for cheating: run buy and sell inside a Cloud Function so a browser cannot invent a net worth. It needs Firebase on the paid plan, so it is a decision to make rather than a thing to code.
+- **Trade history export** — Take your fills away as a file.
+- **Bots** — A few simulated traders so a quiet server still has a market worth beating.
 
 ---
 
