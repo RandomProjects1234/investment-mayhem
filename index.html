@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Investment Mayhem — Multiplayer Investing Sim</title>
-<link rel="stylesheet" href="style.css?v=1.6">
+<link rel="stylesheet" href="style.css?v=1.7">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📈</text></svg>">
-<script src="firebase-config.js?v=1.6"></script>
+<script src="firebase-config.js?v=1.7"></script>
 </head>
 <body>
 
@@ -14,7 +14,7 @@
 <div id="setup" class="setup" hidden>
   <div class="setup-card">
     <h1>Investment Mayhem</h1>
-    <div class="ver-line">version <b>v1.6</b> &middot; <button id="cl-open" class="linkish inline">what's new</button></div>
+    <div class="ver-line">version <b>v1.7</b> &middot; <button id="cl-open" class="linkish inline">what's new</button></div>
     <p class="tag">A multiplayer market simulation. 624 real listed companies, 10 index funds,
        260 properties, crypto, commodities and angel deals — all on one shared clock.</p>
     <p class="disclaimer">Ticker symbols and company names are real; <b>every price in this game is
@@ -305,7 +305,13 @@
     <section class="panel" id="panel-social" hidden>
       <div class="grid2">
         <div class="card">
-          <h2>Leaderboard</h2>
+          <h2>Leaderboard <small id="season-label"></small></h2>
+          <div class="controls">
+            <select id="season-pick"></select>
+            <span id="season-left" class="count"></span>
+          </div>
+          <p class="hint">Seasons run a week and rank you on what you made since it started, so
+            joining late costs you nothing. Nobody loses their portfolio when one ends.</p>
           <div id="board"></div>
         </div>
         <div class="card">
@@ -369,14 +375,31 @@
       <span id="m-shortinfo" class="hint inline"></span>
     </div>
     <div id="m-proptrade" class="trade" hidden>
+      <select id="m-finance">
+        <option value="0">Pay cash</option>
+        <option value="0.5">Mortgage 50%</option>
+        <option value="0.7">Mortgage 70%</option>
+      </select>
       <button id="m-pbuy" class="primary">Buy property</button>
       <button id="m-psell" class="danger">Sell property</button>
+      <button id="m-reno" class="mini">Renovate</button>
+      <button id="m-paymort" class="mini">Pay off mortgage</button>
+      <span id="m-propinfo" class="hint inline"></span>
+    </div>
+    <div id="m-options" class="optionbox" hidden>
+      <h3>Options <small id="m-optexp"></small></h3>
+      <div class="row head chainrow"><div class="c num">Call</div><div class="c num">Strike</div>
+        <div class="c num">Put</div><div class="c act">Contracts</div></div>
+      <div id="m-chain"></div>
+      <p class="hint">You can only buy contracts, so the premium is the most you can lose. They
+        settle automatically at expiry against the price at that exact tick, whether the tab is
+        open or not.</p>
     </div>
   </div>
 </div>
 
 <button id="report-open" title="Report a bug">Report a bug</button>
-<button id="version" title="Update log">v1.6</button>
+<button id="version" title="Update log">v1.7</button>
 
 <!-- ---------------- bug report ---------------- -->
 <div id="report" hidden>
@@ -410,12 +433,12 @@
   <div class="sheet">
     <button id="cl-close" class="x">&times;</button>
     <h1 class="cl-h">Investment Mayhem</h1>
-    <div class="ver-line">update log &middot; <b id="cl-version">v1.6</b></div>
+    <div class="ver-line">update log &middot; <b id="cl-version">v1.7</b></div>
     <div id="cl-next"></div>
     <div id="cl-body"></div>
   </div>
 </div>
 <div id="toast" hidden></div>
-<script type="module" src="js/main.js?v=1.6"></script>
+<script type="module" src="js/main.js?v=1.7"></script>
 </body>
 </html>

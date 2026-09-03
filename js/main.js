@@ -1,8 +1,8 @@
 // Entry point: login screen, Firebase wiring, then hand off to the game loop.
-import * as G from './game.js?v=1.6';
-import * as Net from './net.js?v=1.6';
-import { UI } from './ui.js?v=1.6';
-import { setFlow, marketIndex, nowTick } from './market.js?v=1.6';
+import * as G from './game.js?v=1.7';
+import * as Net from './net.js?v=1.7';
+import { UI } from './ui.js?v=1.7';
+import { setFlow, marketIndex, nowTick } from './market.js?v=1.7';
 
 const $ = s => document.querySelector(s);
 
@@ -113,7 +113,7 @@ function wireOnline() {
   Net.joinPresence(G.state.name || Net.Net.name);
   Net.watchPresence(names => UI.setOnline(names));
   Net.watchFlow(flow => setFlow(flow));
-  Net.watchLeaderboard(rows => UI.setLeaderboard(rows));
+  Net.watchLeaderboard(G.seasonIndex(), rows => UI.setLeaderboard(rows));
   Net.watchFeed(rows => UI.setFeed(rows));
   Net.watchChat(rows => UI.setChat(rows));
   Net.watchInbox(async items => {

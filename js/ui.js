@@ -1,12 +1,12 @@
 // All DOM rendering. Rows are built once per filter change and only their
 // number cells are rewritten on each tick, so 640 stocks stay smooth.
-import * as G from './game.js?v=1.6';
+import * as G from './game.js?v=1.7';
 import { priceNow, priceAt, changePct, history, nowTick, marketIndex,
          recentEvents, flowOf, flowImpact, policyRate, bondYield,
-         nextEarningsTick, earningsQuarter, earningsSurprise } from './market.js?v=1.6';
-import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=1.6';
-import * as Net from './net.js?v=1.6';
-import { RELEASES, NEXT, VERSION } from './changelog.js?v=1.6';
+         nextEarningsTick, earningsQuarter, earningsSurprise, isVacant } from './market.js?v=1.7';
+import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=1.7';
+import * as Net from './net.js?v=1.7';
+import { RELEASES, NEXT, VERSION } from './changelog.js?v=1.7';
 
 const $ = s => document.querySelector(s);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -167,6 +167,7 @@ function renderPortfolio() {
     ['Stocks', v.stocks, '#5b8cff'], ['Bonds', v.bonds, '#9b7bff'],
     ['Property', v.property, '#39d38a'], ['Alternatives', v.alt, '#ffb03a'],
     ['Collectibles', v.collect, '#d98cff'], ['Countries', v.countries, '#ffd166'],
+    ['Options', v.options, '#ff9aa4'],
     ['Angel', v.angel, '#f2618c']];
   const total = Math.max(1, G.state.netWorth);
   const bar = el('div', 'allocbar');
@@ -216,6 +217,18 @@ function renderPortfolio() {
       rows.push({ a, label: a.ticker, sub: a.name, qty: pos.units, px, val, pl: val - pos.cost, cost: pos.cost });
     }
   }
+  for (const id in G.state.options) {
+    const o = G.state.options[id];
+    const a = G.ASSETS.get(o.assetId); if (!a) continue;
+    const premium = G.optionQuote(id);
+    const mins = Math.max(0, Math.round((o.expiryTick - nowTick()) * 3 / 60));
+    rows.push({
+      a, label: a.ticker + ' ' + G.fmtPx(o.strike) + ' ' + o.kind,
+      sub: 'expires in ' + mins + ' min',
+      qty: o.qty, px: premium, val: premium * o.qty,
+      pl: premium * o.qty - o.cost, cost: o.cost, optionId: id,
+    });
+  }
   rows.sort((x, y) => y.val - x.val);
   if (!rows.length) hb.appendChild(el('div', 'empty', 'No positions yet. Head to the Stocks tab and buy something.'));
   for (const r of rows) {
@@ -237,12 +250,15 @@ function renderPortfolio() {
   for (const id of pids) {
     const a = G.ASSETS.get(id); if (!a) continue;
     const p = G.state.props[id], px = priceNow(a);
-    const rentMin = px * a.rentRate * (1 - a.upkeep);
+    const vacant = isVacant(a, nowTick());
+    const rentMin = px * a.rentRate * G.renoMultiplier(p) * (1 - a.upkeep);
+    const extras = (p.debt > 0 ? '<span class="mortbadge"> mortgage ' + G.fmt(p.debt) + '</span>' : '') +
+      (p.reno ? '<span class="renobadge"> reno ' + p.reno + '/' + G.RENO_MAX + '</span>' : '');
     const row = el('div', 'row hrow');
     row.innerHTML =
-      '<div class="c sym"><b>' + a.name + '</b><span>' + a.regionName + ' &middot; ' + a.typeName + '</span></div>' +
-      '<div class="c num">' + G.fmt(px) + '</div>' +
-      '<div class="c num">' + G.fmt(rentMin) + '<small>/min</small></div>' +
+      '<div class="c sym"><b>' + a.name + '</b><span>' + a.regionName + ' &middot; ' + a.typeName + extras + '</span></div>' +
+      '<div class="c num">' + G.fmt(px - (p.debt || 0)) + '</div>' +
+      '<div class="c num">' + (vacant ? '<span class="vacant">vacant</span>' : G.fmt(rentMin) + '<small>/min</small>') + '</div>' +
       '<div class="c num ' + cls(px - p.price) + '">' + G.fmtPct((px - p.price) / p.price * 100) + '</div>';
     const btn = el('button', 'mini danger', 'Sell');
     btn.addEventListener('click', e => { e.stopPropagation(); toast(G.sellProperty(id).msg); lastPortfolioBuild = 0; });
@@ -829,18 +845,23 @@ function renderPropRows() {
 }
 
 function tickPropRows() {
+  const t = nowTick();
   for (const r of propRows) {
-    const p = priceNow(r.a);
-    const rent = p * r.a.rentRate * (1 - r.a.upkeep);
-    r.px.textContent = G.fmt(p);
+    const px = priceNow(r.a);
+    const mine = G.state.props[r.a.id];
+    const rent = px * r.a.rentRate * G.renoMultiplier(mine || {}) * (1 - r.a.upkeep);
+    r.px.textContent = G.fmt(px);
     r.rent.textContent = G.fmt(rent) + '/min';
     const c = changePct(r.a, 900);
     r.yld.textContent = G.fmtPct(c);
     r.yld.className = 'c num yld ' + cls(c);
-    const owned = !!G.state.props[r.a.id];
+    const owned = !!mine;
     r.btn.textContent = owned ? 'Owned' : 'Buy';
     r.btn.disabled = owned;
     r.row.classList.toggle('owned', owned);
+    if (isVacant(r.a, t)) {
+      r.rent.innerHTML = '<span class="vacant">vacant</span>';
+    }
   }
 }
 
@@ -893,15 +914,61 @@ function setLeaderboard(rows) { leaderboard = rows; if (UI.tab === 'social') ren
 function setFeed(rows) { feed = rows; if (UI.tab === 'social') renderFeed(); }
 function setChat(rows) { chat = rows; if (UI.tab === 'social') renderChat(); }
 
+let viewSeason = null;
+
+function seasonCountdown() {
+  const left = G.seasonEndsAt() - Date.now();
+  const days = Math.floor(left / 86400000);
+  const hours = Math.floor((left % 86400000) / 3600000);
+  const mins = Math.floor((left % 3600000) / 60000);
+  return days > 0 ? days + 'd ' + hours + 'h left' : hours > 0 ? hours + 'h ' + mins + 'm left' : mins + 'm left';
+}
+
+function buildSeasonPicker() {
+  const sel = $('#season-pick');
+  const current = G.seasonIndex();
+  if (sel.options.length === current + 1 && sel.dataset.built === String(current)) return;
+  sel.innerHTML = '';
+  for (let i = current; i >= 0; i--) {
+    sel.appendChild(new Option(i === current ? 'Season ' + (i + 1) + ' (live)' : 'Season ' + (i + 1), String(i)));
+  }
+  sel.dataset.built = String(current);
+  sel.value = String(viewSeason === null ? current : viewSeason);
+  sel.onchange = async () => {
+    const pick = Number(sel.value);
+    viewSeason = pick === current ? null : pick;
+    if (viewSeason !== null) {
+      const rows = await Net.loadSeason(viewSeason).catch(() => []);
+      archive = rows;
+    }
+    renderLeaderboard();
+  };
+}
+
+let archive = [];
+
 function renderLeaderboard() {
+  buildSeasonPicker();
+  const current = G.seasonIndex();
+  $('#season-label').textContent = 'Season ' + (current + 1);
+  $('#season-left').textContent = seasonCountdown();
+
+  const live = viewSeason === null;
+  const rows = live
+    ? (leaderboard.length ? leaderboard
+       : [{ uid: Net.Net.uid || 'solo', name: G.state.name || 'You',
+            netWorth: G.state.netWorth, ret: G.seasonReturn() }])
+    : archive;
+
   const b = $('#board'); b.innerHTML = '';
-  const rows = leaderboard.length ? leaderboard
-    : [{ uid: Net.Net.uid || 'solo', name: G.state.name || 'You', netWorth: G.state.netWorth }];
+  if (!rows.length) b.appendChild(el('div', 'empty', 'Nobody posted a score that season.'));
   rows.forEach((r, i) => {
     const d = el('div', 'row brow' + (r.uid === Net.Net.uid ? ' me' : ''));
+    const ret = typeof r.ret === 'number' ? r.ret : 0;
     d.innerHTML = '<div class="c rank">#' + (i + 1) + '</div>' +
-      '<div class="c sym"><b>' + escapeHtml(r.name || 'anon') + '</b></div>' +
-      '<div class="c num">' + G.fmt(r.netWorth) + '</div>';
+      '<div class="c sym"><b>' + escapeHtml(r.name || 'anon') + '</b>' +
+        '<span>' + G.fmt(r.netWorth) + '</span></div>' +
+      '<div class="c num ' + cls(ret) + '">' + G.fmtPct(ret) + '</div>';
     b.appendChild(d);
   });
   if (!Net.Net.online) b.appendChild(el('div', 'empty', 'Solo mode - connect Firebase to see other players.'));
@@ -982,6 +1049,8 @@ function openAsset(id) {
         : SECTOR_BY_ID[a.sector] ? SECTOR_BY_ID[a.sector].name
         : a.class || 'Asset');
   const isProp = a.kind === 'property';
+  $('#m-options').hidden = !G.canOption(a);
+  if (G.canOption(a)) renderChain(a);
   $('#m-trade').hidden = isProp;
   $('#m-order').hidden = isProp;
   $('#m-short').hidden = isProp || !G.canShort(a);
@@ -1039,9 +1108,11 @@ function openAsset(id) {
     };
   } else {
     $('#m-pbuy').onclick = () => {
-      toast(G.buyProperty(a.id).msg); refresh(); tickModal();
+      toast(G.buyProperty(a.id, Number($('#m-finance').value)).msg); refresh(); tickModal();
       if (UI.tab === 'property') renderPropRows();
     };
+    $('#m-reno').onclick = () => { toast(G.renovate(a.id).msg); refresh(); tickModal(); };
+    $('#m-paymort').onclick = () => { toast(G.payMortgage(a.id).msg); refresh(); tickModal(); };
     $('#m-psell').onclick = () => {
       toast(G.sellProperty(a.id).msg); refresh(); tickModal();
       if (UI.tab === 'property') renderPropRows();
@@ -1050,6 +1121,32 @@ function openAsset(id) {
   tickModal();
 }
 function closeModal() { $('#modal').hidden = true; modalAsset = null; }
+
+function renderChain(a) {
+  const chain = G.optionChain(a.id);
+  const body = $('#m-chain'); body.innerHTML = '';
+  if (!chain.length) return;
+  $('#m-optexp').textContent = 'expiring in ' + chain[0].minsLeft + ' min';
+  for (const row of chain) {
+    const r = el('div', 'row chainrow');
+    r.innerHTML =
+      '<div class="c num up">' + G.fmtPx(row.call) + '</div>' +
+      '<div class="c num strike">' + G.fmtPx(row.strike) + '</div>' +
+      '<div class="c num down">' + G.fmtPx(row.put) + '</div>' +
+      '<div class="c act buyopt"></div>';
+    const qty = el('input'); qty.type = 'number'; qty.min = '1'; qty.value = '1';
+    const bc = el('button', 'mini', 'Call');
+    const bp = el('button', 'mini danger', 'Put');
+    bc.addEventListener('click', () => {
+      toast(G.buyOption(a.id, 'call', row.strike, row.expiry, Number(qty.value)).msg); refresh();
+    });
+    bp.addEventListener('click', () => {
+      toast(G.buyOption(a.id, 'put', row.strike, row.expiry, Number(qty.value)).msg); refresh();
+    });
+    r.querySelector('.buyopt').append(qty, bc, bp);
+    body.appendChild(r);
+  }
+}
 
 function setOrderType(type) {
   orderType = type;
@@ -1106,10 +1203,15 @@ function tickModal() {
   } else if (a.kind === 'alt') {
     facts.push(['Type', a.class], ['Volatility', (a.vol * 100).toFixed(0)], ['Beta', a.beta.toFixed(2)]);
   } else {
+    const pp = G.state.props[a.id];
+    const mult = pp ? G.renoMultiplier(pp) : 1;
     facts.push(['Region', a.regionName], ['Type', a.typeName],
-      ['Gross rent', G.fmt(px * a.rentRate) + '/min'],
+      ['Gross rent', G.fmt(px * a.rentRate * mult) + '/min'],
       ['Upkeep', (a.upkeep * 100).toFixed(0) + '%'],
-      ['Net rent', G.fmt(px * a.rentRate * (1 - a.upkeep)) + '/min']);
+      ['Net rent', G.fmt(px * a.rentRate * mult * (1 - a.upkeep)) + '/min'],
+      ['Tenancy', isVacant(a, nowTick()) ? 'vacant' : 'let']);
+    if (pp) facts.push(['Mortgage', G.fmt(pp.debt || 0)],
+      ['Your equity', G.fmt(px - (pp.debt || 0))]);
   }
   if (a.kind === 'stock') {
     const t = nowTick();
@@ -1148,8 +1250,20 @@ function tickModal() {
         (G.SHORT_INITIAL * 100) + '% of the value as equity, and pay ' + G.SHORT_FEE + '% a year to borrow.';
   }
   if (a.kind === 'property') {
-    const owned = !!G.state.props[a.id];
+    const p = G.state.props[a.id];
+    const owned = !!p;
     $('#m-pbuy').disabled = owned; $('#m-psell').disabled = !owned;
+    $('#m-finance').disabled = owned;
+    $('#m-reno').disabled = !owned || (p && (p.reno || 0) >= G.RENO_MAX);
+    $('#m-paymort').disabled = !owned || !(p && p.debt > 0);
+    const vacant = isVacant(a, nowTick());
+    $('#m-propinfo').textContent = owned
+      ? 'Mortgage ' + G.fmt(p.debt || 0) + ' at ' + G.mortgageRate().toFixed(2) + '%. ' +
+        'Renovations ' + (p.reno || 0) + '/' + G.RENO_MAX + ' (+' +
+        Math.round((G.renoMultiplier(p) - 1) * 100) + '% rent). ' +
+        (vacant ? 'Currently vacant, so it is earning nothing.' : 'Currently let.')
+      : 'Finance up to 70% at ' + G.mortgageRate().toFixed(2) + '%. ' +
+        (vacant ? 'This one is vacant right now.' : 'This one is let right now.');
   }
 }
 

@@ -1,12 +1,19 @@
 // Game state, rules and the main loop.
 import { generateCompanies, generateFunds, generateProperties, generateAlts,
          generateBonds, generateCollectibles, generateCountries, generateStartups, startupOutcome,
-         STARTUP_ROUND_TICKS, COLLECT_SPREAD, SECTORS } from './data.js?v=1.6';
-import { priceAt, priceNow, nowTick, TICK_MS, policyRate, setFlow } from './market.js?v=1.6';
-import * as Net from './net.js?v=1.6';
+         STARTUP_ROUND_TICKS, COLLECT_SPREAD, SECTORS } from './data.js?v=1.7';
+import { priceAt, priceNow, nowTick, TICK_MS, policyRate, setFlow,
+         quoteOption, nextExpiries, strikeLadder, realisedVol,
+         isVacant, occupiedFraction } from './market.js?v=1.7';
+import * as Net from './net.js?v=1.7';
 
 export const FEE = 0.002;            // 0.2% trading commission
 export const PROP_CLOSING = 0.03;    // 3% closing cost on property purchase
+export const MORTGAGE_MAX = 0.7;     // you can finance up to 70% of a building
+export const MORTGAGE_SPREAD = 1.5;  // mortgage rate = policy rate + this
+export const RENO_COST = 0.12;       // a renovation costs 12% of the value
+export const RENO_GAIN = 0.18;       // and lifts the rent by 18%
+export const RENO_MAX = 3;
 export const START_CASH = 100000;
 export const MAX_OFFLINE_MIN = 240;  // income accrues for at most 4 hours away
 export const SHORT_FEE = 8;          // % a year to borrow the units you short
@@ -16,6 +23,10 @@ export const LOAN_SPREAD = 3.5;      // margin loan rate = policy rate + this
 export const LOAN_LTV = 0.5;         // you can borrow half your collateral
 export const LOAN_CALL = 0.7;        // above this share of collateral you get called
 export const MAX_ORDERS = 20;
+export const SEASON_MS = 7 * 24 * 3600 * 1000;                 // a season is a week
+export const SEASON_EPOCH = Date.UTC(2026, 8, 3);              // season 0 starts here
+export const seasonIndex = () => Math.max(0, Math.floor((Date.now() - SEASON_EPOCH) / SEASON_MS));
+export const seasonEndsAt = () => SEASON_EPOCH + (seasonIndex() + 1) * SEASON_MS;
 const ORDER_LOOKBACK = 3000;         // ticks of history an order can fill against
 
 // ---- universe (generated once) ----------------------------------------
@@ -50,9 +61,12 @@ function blankState() {
     shorts: {},     // assetId -> { units, proceeds, opened }
     orders: [],     // resting limit and stop orders
     loan: { principal: 0, last: Date.now() },
+    options: {},    // contract id -> { assetId, kind, strike, expiryTick, qty, cost }
     trades: [],     // closed trades, newest first, for the analytics card
     orderTick: 0,   // last tick the order book was checked against
     startNetWorth: START_CASH, startIndex: 0,
+    // Seasons rank you on what you made this week, not on who started first.
+    season: { index: seasonIndex(), startNetWorth: START_CASH, startedAt: Date.now() },
     stats: { trades: 0, realized: 0, rentCollected: 0, dividends: 0, coupons: 0, interest: 0, sovereign: 0 },
     watch: {}, nwHistory: [],
     netWorth: START_CASH, lastDividend: Date.now(),
@@ -108,7 +122,7 @@ export function saveLocal() {
 // positions whose asset no longer exists so value can never vanish silently.
 export function migrate() {
   const blank = blankState();
-  for (const k of ['holdings', 'alts', 'bonds', 'collect', 'countries', 'props', 'startups', 'watch', 'shorts']) {
+  for (const k of ['holdings', 'alts', 'bonds', 'collect', 'countries', 'props', 'startups', 'watch', 'shorts', 'options']) {
     if (!state[k] || typeof state[k] !== 'object') state[k] = {};
   }
   if (!Array.isArray(state.nwHistory)) state.nwHistory = [];
@@ -116,6 +130,9 @@ export function migrate() {
   if (!Array.isArray(state.trades)) state.trades = [];
   if (!state.loan || typeof state.loan.principal !== 'number') state.loan = { principal: 0, last: Date.now() };
   if (!state.startNetWorth) state.startNetWorth = state.netWorth || START_CASH;
+  if (!state.season || typeof state.season.startNetWorth !== 'number') {
+    state.season = { index: seasonIndex(), startNetWorth: state.netWorth || START_CASH, startedAt: Date.now() };
+  }
   if (!Array.isArray(state.log)) state.log = [];
   if (!state.savings || typeof state.savings.balance !== 'number') state.savings = { balance: 0, last: Date.now() };
   state.stats = Object.assign(blank.stats, state.stats || {});
@@ -175,11 +192,13 @@ export function adopt(remote) {
   state.collect = remote.collect || {};
   state.countries = remote.countries || {};
   state.shorts = remote.shorts || {};
+  state.options = remote.options || {};
   state.orders = Array.isArray(remote.orders) ? remote.orders : [];
   state.loan = remote.loan || state.loan;
   state.trades = Array.isArray(remote.trades) ? remote.trades : state.trades;
   state.startNetWorth = remote.startNetWorth || state.startNetWorth;
   state.startIndex = remote.startIndex || state.startIndex;
+  state.season = remote.season || state.season;
   state.props = remote.props || {};
   state.startups = remote.startups || {};
   state.savings = remote.savings || state.savings;
@@ -204,7 +223,7 @@ export function positionsValue() {
   let property = 0, angel = 0;
   for (const id in state.props) {
     const a = ASSETS.get(id); if (!a) continue;
-    property += priceNow(a);
+    property += priceNow(a) - (state.props[id].debt || 0);   // your equity, not the building
   }
   for (const id in state.startups) {
     if (!state.startups[id].resolved) angel += state.startups[id].amount;
@@ -214,12 +233,115 @@ export function positionsValue() {
   const bonds = bookValue(state.bonds);
   const collect = bookValue(state.collect) * (1 - COLLECT_SPREAD);  // valued at what you could get
   const countries = bookValue(state.countries);
+  const options = optionsValue();
   const savings = state.savings.balance;
   const shortLiability = shortsValue();
   const debt = state.loan.principal || 0;
-  const gross = stocks + property + alt + bonds + collect + countries + angel + savings;
-  return { stocks, property, alt, bonds, collect, countries, angel, savings,
+  const gross = stocks + property + alt + bonds + collect + countries + angel + savings + options;
+  return { stocks, property, alt, bonds, collect, countries, angel, savings, options,
            shortLiability, debt, gross, total: gross - shortLiability - debt };
+}
+
+// ---- options -----------------------------------------------------------
+// You can only buy contracts, never write them, so the most you can lose is the
+// premium. Settlement uses the price at the expiry tick, which is knowable
+// exactly, so a contract pays out correctly even if you were away when it went.
+export const OPTION_FEE = 0.01;   // 1% of premium, options are expensive to trade
+
+export function optionsValue() {
+  const t = nowTick();
+  let total = 0;
+  for (const id in state.options) {
+    const o = state.options[id];
+    const a = ASSETS.get(o.assetId); if (!a) continue;
+    total += o.qty * quoteOption(a, o.kind, o.strike, o.expiryTick, t);
+  }
+  return total;
+}
+
+// Live premium for one contract you hold.
+export function optionQuote(id) {
+  const o = state.options[id];
+  if (!o) return 0;
+  const a = ASSETS.get(o.assetId);
+  return a ? quoteOption(a, o.kind, o.strike, o.expiryTick, nowTick()) : 0;
+}
+
+export function canOption(a) {
+  return !!a && (a.kind === 'stock' || a.kind === 'fund');
+}
+
+export function optionChain(assetId) {
+  const a = ASSETS.get(assetId);
+  if (!canOption(a)) return [];
+  const t = nowTick();
+  const expiry = nextExpiries(t, 1)[0];
+  return strikeLadder(a, t).map(strike => ({
+    strike, expiry,
+    minsLeft: Math.max(0, Math.round((expiry - t) * 3 / 60)),
+    call: quoteOption(a, 'call', strike, expiry, t),
+    put: quoteOption(a, 'put', strike, expiry, t),
+  }));
+}
+
+export function buyOption(assetId, kind, strike, expiryTick, qty) {
+  const a = ASSETS.get(assetId);
+  if (!canOption(a)) return { ok: false, msg: 'No options on that asset.' };
+  qty = Math.floor(qty);
+  if (!(qty > 0)) return { ok: false, msg: 'Enter how many contracts.' };
+  const t = nowTick();
+  if (expiryTick <= t) return { ok: false, msg: 'That expiry has passed.' };
+  const premium = quoteOption(a, kind, strike, expiryTick, t);
+  const cost = premium * qty * (1 + OPTION_FEE);
+  if (cost > state.cash) return { ok: false, msg: 'Not enough cash (need ' + fmt(cost) + ').' };
+  state.cash -= cost;
+  const id = 'x' + a.ticker + kind + strike + expiryTick;
+  const pos = state.options[id] || { assetId, kind, strike, expiryTick, qty: 0, cost: 0 };
+  pos.qty += qty; pos.cost += cost;
+  state.options[id] = pos;
+  state.stats.trades++;
+  log('Bought ' + qty + ' ' + a.ticker + ' ' + fmtPx(strike) + ' ' + kind +
+      ' for ' + fmt(cost), true);
+  saveLocal();
+  return { ok: true, msg: 'Bought ' + qty + ' ' + kind + ' at ' + fmtPx(strike) };
+}
+
+export function sellOption(id, qty) {
+  const pos = state.options[id];
+  if (!pos) return { ok: false, msg: 'You do not hold that contract.' };
+  const a = ASSETS.get(pos.assetId);
+  qty = Math.min(Math.floor(qty) || pos.qty, pos.qty);
+  const t = nowTick();
+  const premium = quoteOption(a, pos.kind, pos.strike, pos.expiryTick, t);
+  const gross = premium * qty * (1 - OPTION_FEE);
+  const basis = pos.cost * (qty / pos.qty);
+  pos.cost -= basis; pos.qty -= qty;
+  if (pos.qty <= 0) delete state.options[id];
+  state.cash += gross;
+  state.stats.realized += gross - basis;
+  recordTrade(a.ticker + ' ' + pos.kind, gross - basis, 'option');
+  log('Sold ' + qty + ' ' + a.ticker + ' ' + pos.kind + ' for ' + fmt(gross), gross >= basis);
+  saveLocal();
+  return { ok: true, msg: 'Sold for ' + fmt(gross) };
+}
+
+function settleOptions() {
+  const t = nowTick();
+  for (const id of Object.keys(state.options)) {
+    const o = state.options[id];
+    if (o.expiryTick > t) continue;
+    const a = ASSETS.get(o.assetId);
+    if (!a) { delete state.options[id]; continue; }
+    const settle = priceAt(a, o.expiryTick);
+    const intrinsic = o.kind === 'call' ? Math.max(0, settle - o.strike) : Math.max(0, o.strike - settle);
+    const payout = intrinsic * o.qty;
+    state.cash += payout;
+    state.stats.realized += payout - o.cost;
+    recordTrade(a.ticker + ' ' + o.kind, payout - o.cost, 'option');
+    log(o.qty + ' ' + a.ticker + ' ' + fmtPx(o.strike) + ' ' + o.kind +
+        (payout > 0 ? ' expired in the money for ' + fmt(payout) : ' expired worthless'), payout > o.cost);
+    delete state.options[id];
+  }
 }
 
 // What it would cost right now to buy back everything you are short.
@@ -249,13 +371,15 @@ export function netWorth() {
 }
 
 export function pendingRent() {
-  const now = Date.now();
+  const now = Date.now(), t = nowTick();
   let total = 0;
   for (const id in state.props) {
     const a = ASSETS.get(id); if (!a) continue;
     const p = state.props[id];
     const minutes = Math.min(MAX_OFFLINE_MIN, Math.max(0, (now - (p.lastCollect || now)) / 60000));
-    total += priceNow(a) * a.rentRate * (1 - a.upkeep) * minutes;
+    const fromTick = t - Math.round(minutes * 20);
+    const occ = occupiedFraction(a, fromTick, t);
+    total += priceNow(a) * a.rentRate * renoMultiplier(p) * (1 - a.upkeep) * minutes * occ;
   }
   return total;
 }
@@ -328,28 +452,41 @@ export function sell(assetId, units) {
   return { ok: true, msg: 'Sold for ' + fmt(gross) };
 }
 
-export function buyProperty(id) {
+export function buyProperty(id, financeShare = 0) {
   const a = ASSETS.get(id);
   if (!a || a.kind !== 'property') return { ok: false, msg: 'Unknown property.' };
   if (state.props[id]) return { ok: false, msg: 'You already own it.' };
-  const px = priceNow(a), cost = px * (1 + PROP_CLOSING);
-  if (cost > state.cash) return { ok: false, msg: 'Not enough cash (need ' + fmt(cost) + ').' };
+  const px = priceNow(a);
+  const finance = Math.max(0, Math.min(MORTGAGE_MAX, financeShare));
+  const debt = px * finance;
+  const cost = px * (1 + PROP_CLOSING) - debt;
+  if (cost > state.cash) {
+    return { ok: false, msg: 'Not enough cash (need ' + fmt(cost) +
+      (finance > 0 ? ' as a deposit).' : ').') };
+  }
   state.cash -= cost;
-  state.props[id] = { price: px, bought: Date.now(), lastCollect: Date.now() };
+  state.props[id] = {
+    price: px, bought: Date.now(), lastCollect: Date.now(),
+    debt, reno: 0, mortLast: Date.now(),
+  };
   Net.bumpFlow(id, 1);
   Net.postFeed({ act: 'buy', sym: 'PROPERTY', units: 1, px: +px.toFixed(0), name: state.name, extra: a.name });
-  log('Bought ' + a.name + ' for ' + fmt(cost), true);
+  log('Bought ' + a.name + ' for ' + fmt(cost) +
+      (debt > 0 ? ' with a ' + fmt(debt) + ' mortgage at ' + mortgageRate().toFixed(2) + '%' : ''), true);
   saveLocal();
-  return { ok: true, msg: 'Purchased ' + a.name };
+  return { ok: true, msg: 'Purchased ' + a.name + (debt > 0 ? ' with a mortgage' : '') };
 }
 
 export function sellProperty(id) {
   const a = ASSETS.get(id), p = state.props[id];
   if (!a || !p) return { ok: false, msg: 'You do not own that.' };
   collectRent(id);
+  accrueMortgages();
   const px = priceNow(a) * (1 - 0.02);
-  state.cash += px;
-  state.stats.realized += px - p.price;
+  const debt = p.debt || 0;
+  state.cash += px - debt;
+  state.stats.realized += (px - debt) - (p.price - (p.origDebt || debt));
+  if (debt > 0) log('Cleared the ' + fmt(debt) + ' mortgage on sale', true);
   delete state.props[id];
   Net.bumpFlow(id, -1);
   log('Sold ' + a.name + ' for ' + fmt(px), px >= p.price);
@@ -358,14 +495,15 @@ export function sellProperty(id) {
 }
 
 export function collectRent(only) {
-  const now = Date.now();
+  const now = Date.now(), t = nowTick();
   let total = 0;
   for (const id in state.props) {
     if (only && id !== only) continue;
     const a = ASSETS.get(id); if (!a) continue;
     const p = state.props[id];
     const minutes = Math.min(MAX_OFFLINE_MIN, Math.max(0, (now - (p.lastCollect || now)) / 60000));
-    total += priceNow(a) * a.rentRate * (1 - a.upkeep) * minutes;
+    const occ = occupiedFraction(a, t - Math.round(minutes * 20), t);
+    total += priceNow(a) * a.rentRate * renoMultiplier(p) * (1 - a.upkeep) * minutes * occ;
     p.lastCollect = now;
   }
   if (total > 0) {
@@ -375,6 +513,26 @@ export function collectRent(only) {
     saveLocal();
   }
   return total;
+}
+
+// ---- seasons -----------------------------------------------------------
+// Every week the ranking starts over. Nobody loses their portfolio: the board
+// measures what you made since the season began, so a player who joins on day
+// six is competing on the same terms as everyone else.
+export function seasonReturn() {
+  const base = state.season.startNetWorth || START_CASH;
+  return base > 0 ? (state.netWorth - base) / base * 100 : 0;
+}
+
+function rollSeason() {
+  const now = seasonIndex();
+  if (state.season.index === now) return;
+  const finished = state.season.index;
+  const ret = seasonReturn();
+  state.season = { index: now, startNetWorth: state.netWorth, startedAt: Date.now() };
+  log('Season ' + (finished + 1) + ' closed: you finished ' + fmtPct(ret) +
+      '. Season ' + (now + 1) + ' starts now, from where you stand.', ret >= 0);
+  saveLocal();
 }
 
 // ---- resting orders ----------------------------------------------------
@@ -648,6 +806,56 @@ function liquidateLargest() {
   return true;
 }
 
+// ---- mortgages and renovations -----------------------------------------
+export function accrueMortgages() {
+  const now = Date.now();
+  const rate = mortgageRate();
+  for (const id in state.props) {
+    const p = state.props[id];
+    if (!(p.debt > 0)) { p.mortLast = now; continue; }
+    const minutes = Math.min(MAX_OFFLINE_MIN, (now - (p.mortLast || now)) / 60000);
+    p.mortLast = now;
+    if (minutes <= 0) continue;
+    const interest = p.debt * (rate / 100) * (minutes / 52);
+    p.debt += interest;
+    state.stats.mortgageInterest = (state.stats.mortgageInterest || 0) + interest;
+  }
+}
+
+export const totalMortgageDebt = () => {
+  let d = 0;
+  for (const id in state.props) d += state.props[id].debt || 0;
+  return d;
+};
+
+export function payMortgage(id, amount) {
+  const p = state.props[id];
+  if (!p || !(p.debt > 0)) return { ok: false, msg: 'Nothing owed on that one.' };
+  accrueMortgages();
+  amount = Math.min(amount || p.debt, p.debt, state.cash);
+  if (!(amount > 0)) return { ok: false, msg: 'No cash to pay it down with.' };
+  p.debt -= amount; state.cash -= amount;
+  const a = ASSETS.get(id);
+  log('Paid ' + fmt(amount) + ' off the mortgage on ' + (a ? a.name : id), true);
+  saveLocal();
+  return { ok: true, msg: 'Paid down ' + fmt(amount) };
+}
+
+export function renovate(id) {
+  const a = ASSETS.get(id), p = state.props[id];
+  if (!a || !p) return { ok: false, msg: 'You do not own that.' };
+  if ((p.reno || 0) >= RENO_MAX) return { ok: false, msg: 'That building is already fully renovated.' };
+  const cost = priceNow(a) * RENO_COST;
+  if (cost > state.cash) return { ok: false, msg: 'A renovation costs ' + fmt(cost) + '.' };
+  state.cash -= cost;
+  p.reno = (p.reno || 0) + 1;
+  state.stats.renovations = (state.stats.renovations || 0) + 1;
+  log('Renovated ' + a.name + ' for ' + fmt(cost) + '. Rent is now ' +
+      Math.round((renoMultiplier(p) - 1) * 100) + '% higher', true);
+  saveLocal();
+  return { ok: true, msg: 'Renovated. Rent up ' + Math.round(RENO_GAIN * 100) + '%' };
+}
+
 // ---- savings account ---------------------------------------------------
 export function deposit(amount) {
   if (!(amount > 0)) return { ok: false, msg: 'Enter an amount.' };
@@ -674,6 +882,8 @@ export function withdraw(amount) {
 }
 
 export const savingsRate = () => Math.max(0.25, rateNow() - 0.6);
+export const mortgageRate = () => rateNow() + MORTGAGE_SPREAD;
+export const renoMultiplier = p => 1 + RENO_GAIN * (p.reno || 0);
 
 function accrueInterest() {
   const now = Date.now();
@@ -747,6 +957,7 @@ function payIncome() {
   }
   accrueInterest();
   accrueLoan();
+  accrueMortgages();
 
   let borrowCost = 0;
   for (const id in state.shorts) {
@@ -839,11 +1050,13 @@ function sampleNetWorth() {
 
 export function saveNow() {
   saveLocal();
-  if (Net.Net.online) Net.savePlayer(state).catch(() => {});
+  if (Net.Net.online) Net.savePlayer(state, seasonIndex(), seasonReturn()).catch(() => {});
 }
 
 export function startLoop() {
   const step = () => {
+    rollSeason();
+    settleOptions();
     resolveStartups();
     checkOrders();
     payIncome();
@@ -855,7 +1068,7 @@ export function startLoop() {
     if (now - lastSave > 5000) { saveLocal(); lastSave = now; }
     if (Net.Net.online && now - lastCloud > 15000) {
       lastCloud = now;
-      Net.savePlayer(state).catch(() => {});
+      Net.savePlayer(state, seasonIndex(), seasonReturn()).catch(() => {});
     }
   };
   step();

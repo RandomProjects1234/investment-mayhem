@@ -87,9 +87,9 @@ export async function loadPlayer() {
 
 // Set by savePlayer so the UI can say when the cloud has stopped accepting
 // writes instead of pretending everything is fine.
-export const SaveState = { lastOk: 0, lastError: null };
+export const SaveState = { lastOk: 0, lastError: null, throttled: false };
 
-export async function savePlayer(state) {
+export async function savePlayer(state, season, seasonRet) {
   const { update, set } = Net._fb;
   const payload = {
     name: state.name, nameLower: (state.name || '').toLowerCase(),
@@ -97,21 +97,37 @@ export async function savePlayer(state) {
     updated: Date.now(), netWorth: state.netWorth || 0,
     holdings: state.holdings || {}, props: state.props || {},
     alts: state.alts || {}, bonds: state.bonds || {}, collect: state.collect || {},
-    countries: state.countries || {},
+    countries: state.countries || {}, options: state.options || {},
+    shorts: state.shorts || {}, loan: state.loan || { principal: 0, last: Date.now() },
+    orders: (state.orders || []).filter(o => o.status === 'open').slice(0, 20),
+    season: state.season || null, startNetWorth: state.startNetWorth || 0,
+    startIndex: state.startIndex || 0,
     savings: state.savings || { balance: 0, last: Date.now() },
     startups: state.startups || {}, lastDividend: state.lastDividend || Date.now(),
     watch: state.watch || {}, stats: state.stats || {},
   };
   try {
     await update(R('players/' + Net.uid), payload);
-    await set(R('leaderboard/' + Net.uid), {
-      name: state.name, netWorth: Math.round(state.netWorth || 0), ts: Date.now(),
-    });
     SaveState.lastOk = Date.now();
     SaveState.lastError = null;
   } catch (e) {
     SaveState.lastError = e.message || String(e);
     throw e;
+  }
+
+  // The board is rate limited on the server to make console-edited net worths
+  // hard to post. A refusal here is not a broken save, so it is reported
+  // separately rather than as a failure.
+  try {
+    await set(R('leaderboard/' + season + '/' + Net.uid), {
+      name: state.name,
+      netWorth: Math.round(state.netWorth || 0),
+      ret: Math.round((seasonRet || 0) * 100) / 100,
+      ts: Date.now(),
+    });
+    SaveState.throttled = false;
+  } catch (e) {
+    SaveState.throttled = true;
   }
 }
 
@@ -140,18 +156,28 @@ export function watchFlow(cb) {
 }
 
 // ---- leaderboard -------------------------------------------------------
-export function watchLeaderboard(cb, n = 50) {
+export function watchLeaderboard(season, cb, n = 50) {
   if (!Net.online) return () => {};
   const { onValue, query, orderByChild, limitToLast } = Net._fb;
-  const q = query(R('leaderboard'), orderByChild('netWorth'), limitToLast(n));
+  const q = query(R('leaderboard/' + season), orderByChild('ret'), limitToLast(n));
   const un = onValue(q, snap => {
     const rows = [];
     snap.forEach(c => { rows.push({ uid: c.key, ...c.val() }); });
-    rows.sort((a, b) => b.netWorth - a.netWorth);
+    rows.sort((a, b) => (b.ret || 0) - (a.ret || 0));
     cb(rows);
   });
   Net._listeners.push(un);
   return un;
+}
+
+// One-off read of a finished season, for the archive.
+export async function loadSeason(season, n = 25) {
+  if (!Net.online) return [];
+  const { get, query, orderByChild, limitToLast } = Net._fb;
+  const snap = await get(query(R('leaderboard/' + season), orderByChild('ret'), limitToLast(n)));
+  const rows = [];
+  snap.forEach(c => { rows.push({ uid: c.key, ...c.val() }); });
+  return rows.sort((a, b) => (b.ret || 0) - (a.ret || 0));
 }
 
 // ---- trade feed --------------------------------------------------------

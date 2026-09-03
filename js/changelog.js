@@ -1,9 +1,24 @@
 // Release history and roadmap. Rendered in-game (click the version badge) and
 // mirrored in CHANGELOG.md / ROADMAP.md so the repo tells the same story.
 
-export const VERSION = 'v1.6';
+export const VERSION = 'v1.7';
 
 export const RELEASES = [
+  {
+    version: 'v1.7',
+    date: '2026-09-03',
+    title: 'Seasons, options and mortgages',
+    items: [
+      ['new', 'Weekly seasons. The board now ranks you on what you made since the season started, not on who has been playing longest, so joining on day six costs you nothing. Nobody loses their portfolio when a season turns over, and finished seasons stay readable from the picker.'],
+      ['new', 'Options. Calls and puts on every company and fund, five strikes around the money, expiring on a shared 30 minute cycle, priced with Black-Scholes off the game rate and the tape realised volatility. You can only buy them, so the premium is the most you can lose, and they settle themselves against the price at the exact expiry tick whether you are watching or not.'],
+      ['new', 'Mortgages. Finance up to 70% of a building at the policy rate plus 1.5. Your property line now shows equity rather than the whole value, and interest compounds every minute.'],
+      ['new', 'Renovations. Three levels per building, 12% of the value each, and each one lifts the rent 18% permanently.'],
+      ['new', 'Tenants come and go. Buildings sit empty about an eighth of the time, in stretches rather than flickering, and a vacant building earns nothing while it waits.'],
+      ['bal', 'The leaderboard is rate limited on the server: at most one post every ten seconds and a cap on how far net worth can jump between posts. That makes a console-edited score hard to publish, though a patient cheat can still creep. Properly fixing it means running trades on a server, which needs a paid Firebase plan, so it stays on the roadmap rather than being quietly claimed as done.'],
+      ['fix', 'A wrong approximation in the option pricing made quotes near the money collapse to a cent. Put-call parity now holds exactly.'],
+      ['fix', 'A leaderboard refusal is no longer reported as a broken cloud save, because the two are different problems.'],
+    ],
+  },
   {
     version: 'v1.6',
     date: '2026-09-03',
@@ -115,23 +130,24 @@ export const RELEASES = [
 
 // What the next update is aiming at. Ordered by what would change the game most.
 export const NEXT = {
-  version: 'v1.7',
-  title: 'Seasons and a fairer market',
+  version: 'v1.8',
+  title: 'Alerts and a smoother first hour',
   items: [
-    ['Weekly seasons',
-     'The leaderboard resets on a schedule and past seasons are archived, so somebody joining on day nine still has something to win.'],
-    ['Server-authoritative trading',
-     'Move buy and sell into a Cloud Function so the leaderboard cannot be edited from the browser console. Nothing else about the architecture has to change.'],
-    ['Options',
-     'Simple calls and puts on the larger names, priced off the same curve the rest of the game already uses.'],
-    ['Property depth',
-     'Mortgages so you can lever a building, renovations that raise rent, and tenants who leave.'],
-    ['Everything reported since v1.6',
-     'Reports are read before every release and reported back. The country market in v1.5 came from one, so keep them coming through the Report a bug button.'],
+    ['Price alerts',
+     'Tell the game to shout when something crosses a level, instead of you sitting and watching for it. The order engine already replays missed ticks, so an alert can tell you what happened while you were away.'],
+    ['A first run walkthrough',
+     'There is a lot here now: stocks, funds, property, bonds, savings, collectibles, countries, angel deals, orders, shorts, margin and options. A new player deserves a guided first ten minutes.'],
+    ['Trade history you can take with you',
+     'Export your fills, so a season can be argued about properly.'],
+    ['Sector and country detail pages',
+     'A page per sector and per country, with its members, its news and how it has moved.'],
+    ['Everything reported since v1.7',
+     'Reports are read before every release and reported back to the developer. The country market came from one. Keep them coming through the Report a bug button.'],
   ],
   later: [
-    ['Alerts', 'Tell the game to shout when something crosses a price, instead of you watching for it.'],
-    ['Trade history export', 'Take your fills away as a file.'],
-    ['Tutorial', 'A first-run walkthrough, because there is a lot here now.'],
+    ['Server-authoritative trading',
+     'The honest fix for cheating: run buy and sell inside a Cloud Function so a browser cannot invent a net worth. It needs Firebase on the paid Blaze plan, so it is a decision to make rather than a thing to code.'],
+    ['Dividend reinvestment', 'Let income buy more of what paid it, automatically.'],
+    ['Bots', 'A few simulated traders so a quiet server still has a market and a leaderboard worth beating.'],
   ],
 };

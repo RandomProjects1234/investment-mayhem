@@ -1,6 +1,6 @@
 # Investment Mayhem — a multiplayer investing sim on GitHub Pages
 
-**Play it: <https://randomprojects1234.github.io/investment-mayhem/>** &nbsp;·&nbsp; version **v1.6** &nbsp;·&nbsp; [changelog](CHANGELOG.md) &nbsp;·&nbsp; [roadmap](ROADMAP.md)
+**Play it: <https://randomprojects1234.github.io/investment-mayhem/>** &nbsp;·&nbsp; version **v1.7** &nbsp;·&nbsp; [changelog](CHANGELOG.md) &nbsp;·&nbsp; [roadmap](ROADMAP.md)
 
 Pure static frontend (HTML + CSS + ES modules, no build step) with Firebase
 Realtime Database as the only backend. **624 real listed companies** across 11
@@ -92,6 +92,10 @@ Two ways to run your own world instead:
 | `/market/flow/{asset}` | public | any signed-in player, clamped to ±5e9 |
 | `/feed`, `/chat` | public | append-only, must carry your own uid, length-capped |
 
+The leaderboard adds a server-side rate limit: one post per ten seconds per player, and a cap
+on how far net worth may jump between posts. That makes a console-edited score awkward to
+publish, but it is a speed bump, not a wall.
+
 **Honest limitation:** this is a client-authoritative game. The rules stop players
 from editing *other people's* data, spoofing identities, or writing garbage shapes,
 but a determined player can still edit their own savegame in the console. That is
@@ -138,6 +142,13 @@ architecture does not change.
   above 70%).
 - **Earnings** — every company reports on a fixed schedule derived from its seed; the surprise
   is a hash of the quarter number, so it is decided in advance and revealed on the day.
+- **Options** — calls and puts on companies and funds, five strikes, a shared 30-minute expiry
+  cycle, Black-Scholes priced off the policy rate and realised volatility of the tape. Buy only,
+  and settlement uses `priceAt(asset, expiryTick)` so it is exact even if nobody was watching.
+- **Seasons** — the leaderboard runs in weekly seasons and ranks by return since the season
+  began, so joining late is not a handicap. Portfolios carry over; past seasons stay readable.
+- **Property depth** — mortgages up to 70% at policy + 1.5, three renovation levels at +18% rent
+  each, and tenancy: a building is empty about an eighth of the time and earns nothing while it is.
 - **Players** — live net-worth leaderboard, presence (who is online now), trade tape, chat,
   and cash/asset transfers by username.
 - **Bug reports** — the "Report a bug" button files a report to the server for the developer

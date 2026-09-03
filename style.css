@@ -311,4 +311,21 @@ h2 .mini{float:right;margin-top:-4px}
   .orow>.c:nth-child(1),.orow>.c:nth-child(3),.orow>.c:nth-child(7){display:block}
 }
 
+/* ---------- v1.7: seasons, options, mortgages ---------- */
+.optionbox{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.optionbox h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:#9fb0c4}
+.optionbox h3 small{text-transform:none;letter-spacing:0;color:var(--dim);margin-left:8px}
+.chainrow{grid-template-columns:1fr 1fr 1fr 120px}
+.chainrow .strike{font-weight:700}
+.chainrow .buyopt{display:flex;gap:4px;justify-content:flex-end}
+.chainrow .buyopt input{width:46px;padding:4px 6px;font-size:12px;text-align:right}
+.vacant{color:#ffcf6b;font-size:11px;letter-spacing:.05em}
+.mortbadge{color:#ff9aa4;font-size:11px;font-family:var(--mono)}
+.renobadge{color:#8ff0c0;font-size:11px;font-family:var(--mono)}
+.seasonbadge{font-family:var(--mono);color:#ffcf6b}
+@media(max-width:600px){
+  .chainrow{grid-template-columns:1fr 1fr 1fr 90px}
+  .chainrow>.c{display:block}
+}
+
 [hidden]{display:none !important}

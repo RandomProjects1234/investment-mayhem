@@ -50,18 +50,26 @@
     },
     "leaderboard": {
       ".read": true,
-      ".indexOn": "netWorth",
-      "$uid": {
-        ".write": "auth != null && auth.uid === $uid",
-        ".validate": "newData.hasChildren(['name','netWorth','ts'])",
-        "name": {
-          ".validate": "newData.isString() && newData.val().length <= 16"
-        },
-        "netWorth": {
-          ".validate": "newData.isNumber() && newData.val() < 1e15"
-        },
-        "ts": {
-          ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+      "$season": {
+        ".indexOn": [
+          "ret",
+          "netWorth"
+        ],
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['name','netWorth','ts','ret']) && (!data.exists() || (newData.child('ts').val() > data.child('ts').val() + 10000 && newData.child('netWorth').val() <= data.child('netWorth').val() * 1.2 + 50000))",
+          "name": {
+            ".validate": "newData.isString() && newData.val().length <= 16"
+          },
+          "netWorth": {
+            ".validate": "newData.isNumber() && newData.val() < 1e12"
+          },
+          "ret": {
+            ".validate": "newData.isNumber() && newData.val() > -100.01 && newData.val() < 1e9"
+          },
+          "ts": {
+            ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+          }
         }
       }
     },

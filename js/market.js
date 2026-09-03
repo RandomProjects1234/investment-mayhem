@@ -4,7 +4,7 @@
 // plus one shared multiplayer term (net player flow, read from Firebase).
 // Because the tick index comes from wall-clock time, every browser in the world
 // draws the same chart without any server doing the simulating.
-import { fbm, hashF, clamp } from './rng.js?v=1.6';
+import { fbm, hashF, vnoise, clamp } from './rng.js?v=1.7';
 
 export const TICK_MS = 3000;               // one market tick = 3 real seconds
 export const nowTick = () => Math.floor(Date.now() / TICK_MS);
@@ -253,6 +253,110 @@ export function history(asset, points = 120, step = 4) {
   const out = new Array(points);
   for (let i = 0; i < points; i++) out[i] = priceAt(asset, t - (points - 1 - i) * step);
   return out;
+}
+
+// ---- tenancy -----------------------------------------------------------
+// Buildings sit empty sometimes. Deterministic like everything else, and in
+// blocks rather than flickering, so a vacancy is something you notice.
+export function occupancyAt(prop, t) {
+  return vnoise((prop.seed ^ 0x7c1a) | 0, t / 240) < 0.13 ? 0 : 1;
+}
+
+export const isVacant = (prop, t) => occupancyAt(prop, t) === 0;
+
+// Share of a window the place was actually let, sampled across the period.
+export function occupiedFraction(prop, fromTick, toTick) {
+  const span = Math.max(1, toTick - fromTick);
+  const samples = Math.min(12, Math.max(2, Math.round(span / 40)));
+  let occupied = 0;
+  for (let i = 0; i < samples; i++) {
+    occupied += occupancyAt(prop, fromTick + (span * (i + 0.5)) / samples);
+  }
+  return occupied / samples;
+}
+
+// ---- options -----------------------------------------------------------
+// Contracts expire on a shared 30 minute cycle, and because the price at any
+// tick is known exactly, an expired contract settles at the true price of its
+// expiry tick whether or not anyone was watching.
+export const EXPIRY_CYCLE = 600;                 // ticks between expiries
+export const TICKS_PER_INCOME_YEAR = 1040;       // the clock dividends use
+
+export function nextExpiries(t, n = 2) {
+  const first = Math.ceil((t + 30) / EXPIRY_CYCLE) * EXPIRY_CYCLE;
+  return Array.from({ length: n }, (_, i) => first + i * EXPIRY_CYCLE);
+}
+
+// Realised volatility of the recent tape, annualised on the income clock.
+const volCache = new Map();
+export function realisedVol(asset, t) {
+  const bucket = Math.floor(t / 60);
+  const key = asset.id + '|' + bucket;
+  const hit = volCache.get(key);
+  if (hit !== undefined) return hit;
+  let sum = 0, sum2 = 0;
+  const n = 60, step = 4;
+  for (let i = 0; i < n; i++) {
+    const a = priceAt(asset, t - (i + 1) * step);
+    const b = priceAt(asset, t - i * step);
+    const r = Math.log(b / a);
+    sum += r; sum2 += r * r;
+  }
+  const mean = sum / n;
+  const varPerStep = Math.max(1e-12, sum2 / n - mean * mean);
+  const v = Math.sqrt(varPerStep / step * TICKS_PER_INCOME_YEAR);
+  const out = Math.min(6, Math.max(0.05, v));
+  if (volCache.size > 4000) volCache.clear();
+  volCache.set(key, out);
+  return out;
+}
+
+// erf via Abramowitz and Stegun 7.1.26, then the normal CDF from it.
+function erf(z) {
+  const sign = z < 0 ? -1 : 1;
+  z = Math.abs(z);
+  const a = [0.254829592, -0.284496736, 1.421413741, -1.453152027, 1.061405429];
+  const t = 1 / (1 + 0.3275911 * z);
+  let poly = 0, term = t;
+  for (let i = 0; i < a.length; i++) { poly += a[i] * term; term *= t; }
+  return sign * (1 - poly * Math.exp(-z * z));
+}
+
+function normCdf(x) { return 0.5 * (1 + erf(x / Math.SQRT2)); }
+
+// Black-Scholes, with the game's own policy rate as the risk free rate.
+export function optionPrice(kind, S, K, years, sigma, r) {
+  if (years <= 0) return Math.max(0, kind === 'call' ? S - K : K - S);
+  const sqrtT = Math.sqrt(years);
+  const d1 = (Math.log(S / K) + (r + sigma * sigma / 2) * years) / (sigma * sqrtT);
+  const d2 = d1 - sigma * sqrtT;
+  const disc = Math.exp(-r * years);
+  return kind === 'call'
+    ? S * normCdf(d1) - K * disc * normCdf(d2)
+    : K * disc * normCdf(-d2) - S * normCdf(-d1);
+}
+
+export function quoteOption(asset, kind, strike, expiryTick, t) {
+  const S = priceAt(asset, t);
+  const years = Math.max(0, (expiryTick - t) / TICKS_PER_INCOME_YEAR);
+  const sigma = realisedVol(asset, t);
+  const r = policyRate(t) / 100;
+  return Math.max(0.01, optionPrice(kind, S, strike, years, sigma, r));
+}
+
+// A tidy ladder of strikes around the money.
+const NICE_STEPS = [0.0001, 0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500];
+
+export function strikeLadder(asset, t) {
+  const S = priceAt(asset, t);
+  const want = S * 0.04;                       // strikes about 4% apart
+  let step = NICE_STEPS[NICE_STEPS.length - 1];
+  for (const c of NICE_STEPS) if (c >= want) { step = c; break; }
+  const atm = Math.round(S / step) * step;
+  const dp = step < 1 ? 4 : 2;
+  return [-2, -1, 0, 1, 2]
+    .map(i => +(atm + i * step).toFixed(dp))
+    .filter(k => k > 0);
 }
 
 // Index of the whole market, for the header.

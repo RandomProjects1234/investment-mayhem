@@ -1,10 +1,22 @@
 # Changelog
 
-All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v1.6**.
+All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v1.7**.
 
 This file is generated from `js/changelog.js`, which is also what the in-game
 update log reads — click the version badge in the corner. Edit that file, then
 run `node tools/release.mjs`.
+
+## v1.7 — Seasons, options and mortgages
+*2026-09-03*
+
+- **New** — Weekly seasons. The board now ranks you on what you made since the season started, not on who has been playing longest, so joining on day six costs you nothing. Nobody loses their portfolio when a season turns over, and finished seasons stay readable from the picker.
+- **New** — Options. Calls and puts on every company and fund, five strikes around the money, expiring on a shared 30 minute cycle, priced with Black-Scholes off the game rate and the tape realised volatility. You can only buy them, so the premium is the most you can lose, and they settle themselves against the price at the exact expiry tick whether you are watching or not.
+- **New** — Mortgages. Finance up to 70% of a building at the policy rate plus 1.5. Your property line now shows equity rather than the whole value, and interest compounds every minute.
+- **New** — Renovations. Three levels per building, 12% of the value each, and each one lifts the rent 18% permanently.
+- **New** — Tenants come and go. Buildings sit empty about an eighth of the time, in stretches rather than flickering, and a vacant building earns nothing while it waits.
+- **Tuning** — The leaderboard is rate limited on the server: at most one post every ten seconds and a cap on how far net worth can jump between posts. That makes a console-edited score hard to publish, though a patient cheat can still creep. Properly fixing it means running trades on a server, which needs a paid Firebase plan, so it stays on the roadmap rather than being quietly claimed as done.
+- **Fix** — A wrong approximation in the option pricing made quotes near the money collapse to a cent. Put-call parity now holds exactly.
+- **Fix** — A leaderboard refusal is no longer reported as a broken cloud save, because the two are different problems.
 
 ## v1.6 — Orders and leverage
 *2026-09-03*

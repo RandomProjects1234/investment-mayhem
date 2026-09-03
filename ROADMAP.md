@@ -1,32 +1,32 @@
 # Roadmap
 
-## Next up — v1.7: Seasons and a fairer market
+## Next up — v1.8: Alerts and a smoother first hour
 
-### Weekly seasons
+### Price alerts
 
-The leaderboard resets on a schedule and past seasons are archived, so somebody joining on day nine still has something to win.
+Tell the game to shout when something crosses a level, instead of you sitting and watching for it. The order engine already replays missed ticks, so an alert can tell you what happened while you were away.
 
-### Server-authoritative trading
+### A first run walkthrough
 
-Move buy and sell into a Cloud Function so the leaderboard cannot be edited from the browser console. Nothing else about the architecture has to change.
+There is a lot here now: stocks, funds, property, bonds, savings, collectibles, countries, angel deals, orders, shorts, margin and options. A new player deserves a guided first ten minutes.
 
-### Options
+### Trade history you can take with you
 
-Simple calls and puts on the larger names, priced off the same curve the rest of the game already uses.
+Export your fills, so a season can be argued about properly.
 
-### Property depth
+### Sector and country detail pages
 
-Mortgages so you can lever a building, renovations that raise rent, and tenants who leave.
+A page per sector and per country, with its members, its news and how it has moved.
 
-### Everything reported since v1.6
+### Everything reported since v1.7
 
-Reports are read before every release and reported back. The country market in v1.5 came from one, so keep them coming through the Report a bug button.
+Reports are read before every release and reported back to the developer. The country market came from one. Keep them coming through the Report a bug button.
 
 ## Further out
 
-- **Alerts** — Tell the game to shout when something crosses a price, instead of you watching for it.
-- **Trade history export** — Take your fills away as a file.
-- **Tutorial** — A first-run walkthrough, because there is a lot here now.
+- **Server-authoritative trading** — The honest fix for cheating: run buy and sell inside a Cloud Function so a browser cannot invent a net worth. It needs Firebase on the paid Blaze plan, so it is a decision to make rather than a thing to code.
+- **Dividend reinvestment** — Let income buy more of what paid it, automatically.
+- **Bots** — A few simulated traders so a quiet server still has a market and a leaderboard worth beating.
 
 ---
 
