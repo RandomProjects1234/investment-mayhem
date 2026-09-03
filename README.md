@@ -1,5 +1,7 @@
 # Ledger City — a multiplayer investing sim on GitHub Pages
 
+**Play it: <https://randomprojects1234.github.io/ledger-city/>** &nbsp;·&nbsp; version **v1.0**
+
 Pure static frontend (HTML + CSS + ES modules, no build step) with Firebase
 Realtime Database as the only backend. 640 fictional companies across 12 sectors,
 260 properties, 12 cryptos, 8 commodities, and a rotating slate of angel deals.
