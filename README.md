@@ -70,7 +70,8 @@ Two ways in:
 
 ## Firebase setup
 
-1. Create a project, then **Realtime Database** (not Firestore — the rules here are RTDB).
+1. Create a project (the live one is called **Investment Mayhem**), then add a
+   **Realtime Database** (not Firestore — the rules here are written for RTDB).
 2. Authentication → Sign-in method → enable **Anonymous**.
 3. Paste your web config into `firebase-config.js`, or leave the placeholders and
    let each player paste theirs into the in-game "Server settings" box.
