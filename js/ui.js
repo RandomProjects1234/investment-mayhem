@@ -5,14 +5,67 @@ import { priceNow, priceAt, changePct, history, nowTick, marketIndex,
          recentEvents, flowOf, flowImpact } from './market.js';
 import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js';
 import * as Net from './net.js';
+import { RELEASES, NEXT, VERSION } from './changelog.js';
 
 const $ = s => document.querySelector(s);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
 const cls = n => n >= 0 ? 'up' : 'down';
 
-export const UI = { tab: 'portfolio', toast, openAsset, refresh, boot, setLeaderboard, setFeed, setChat, setStatus };
+export const UI = { tab: 'portfolio', toast, openAsset, refresh, boot, setLeaderboard, setFeed, setChat, setStatus, initChangelog };
 
 let leaderboard = [], feed = [], chat = [];
+
+// ---------------- update log ----------------
+// Rendered from js/changelog.js, the same source CHANGELOG.md is built from.
+function initChangelog() {
+  $('#version').textContent = VERSION;
+  $('#cl-version').textContent = VERSION;
+  const open = () => { renderChangelog(); $('#changelog').hidden = false; };
+  $('#version').addEventListener('click', open);
+  const link = $('#cl-open');
+  if (link) link.addEventListener('click', open);
+  $('#cl-close').addEventListener('click', () => { $('#changelog').hidden = true; });
+  $('#changelog').addEventListener('click', e => {
+    if (e.target.id === 'changelog') $('#changelog').hidden = true;
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { $('#changelog').hidden = true; closeModal(); }
+  });
+}
+
+let changelogBuilt = false;
+function renderChangelog() {
+  if (changelogBuilt) return;
+  changelogBuilt = true;
+
+  const next = $('#cl-next');
+  next.className = 'cl-next';
+  next.innerHTML = '<h3>Next up &mdash; <b>' + NEXT.version + '</b> ' + NEXT.title + '</h3>';
+  for (const [name, why] of NEXT.items) {
+    const d = el('div', 'cl-plan');
+    d.innerHTML = '<b>' + name + '</b><span>' + why + '</span>';
+    next.appendChild(d);
+  }
+  const later = el('div', 'cl-later');
+  later.innerHTML = '<b>Further out:</b> ' + NEXT.later.map(x => x[0]).join(' &middot; ');
+  later.title = NEXT.later.map(x => x[0] + ': ' + x[1]).join('\n');
+  next.appendChild(later);
+
+  const body = $('#cl-body');
+  body.innerHTML = '';
+  for (const rel of RELEASES) {
+    const box = el('div', 'cl-rel');
+    box.innerHTML = '<h3><b>' + rel.version + '</b>' + rel.title + '</h3>' +
+      '<div class="cl-date">' + rel.date + '</div>';
+    for (const [tag, text] of rel.items) {
+      const line = el('div', 'cl-item');
+      line.innerHTML = '<span class="cl-tag ' + tag + '">' +
+        ({ new: 'new', bal: 'tuning', fix: 'fix' }[tag] || tag) + '</span><span>' + text + '</span>';
+      box.appendChild(line);
+    }
+    body.appendChild(box);
+  }
+}
 
 // ---------------- boot ----------------
 function boot() {
@@ -492,10 +545,15 @@ function sendChatMsg() {
 }
 
 // ---------------- asset modal ----------------
-let modalAsset = null, tradeMode = 'units';
+let modalAsset = null;
+let tradeMode = (() => {
+  try { return localStorage.getItem('is_trade_mode') === 'cash' ? 'cash' : 'units'; }
+  catch (e) { return 'units'; }
+})();
 
 function setTradeMode(mode) {
   tradeMode = mode;
+  try { localStorage.setItem('is_trade_mode', mode); } catch (e) { /* ignore */ }
   const a = modalAsset;
   $('#m-mode').textContent = mode === 'cash' ? '$ amount' : 'Quantity';
   $('#m-qty').placeholder = mode === 'cash' ? 'Dollars to spend' : 'Number of units';

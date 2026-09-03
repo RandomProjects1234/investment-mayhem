@@ -1,6 +1,6 @@
 # Ledger City — a multiplayer investing sim on GitHub Pages
 
-**Play it: <https://randomprojects1234.github.io/ledger-city/>** &nbsp;·&nbsp; version **v1.1**
+**Play it: <https://randomprojects1234.github.io/ledger-city/>** &nbsp;·&nbsp; version **v1.10** &nbsp;·&nbsp; [changelog](CHANGELOG.md) &nbsp;·&nbsp; [roadmap](ROADMAP.md)
 
 Pure static frontend (HTML + CSS + ES modules, no build step) with Firebase
 Realtime Database as the only backend. **624 real listed companies** across 11
@@ -119,6 +119,8 @@ architecture does not change.
 | `js/ui.js` | all rendering, charts, modal |
 | `js/net.js` | Firebase adapter + solo fallback |
 | `js/main.js` | login screen and wiring |
+| `js/changelog.js` | release history and roadmap, read by the in-game update log |
+| `tools/gen-docs.mjs` | regenerates CHANGELOG.md and ROADMAP.md from that file |
 | `database.rules.json` | RTDB security rules |
 
 Debug hook: `window.IS` exposes `{ G, Net, UI }` in the console.

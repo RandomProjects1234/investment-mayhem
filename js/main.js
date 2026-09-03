@@ -8,6 +8,7 @@ const $ = s => document.querySelector(s);
 
 function showSetup() {
   $('#setup').hidden = false;
+  UI.initChangelog();
   const cfg = Net.loadConfig();
   $('#cfg-json').value = cfg ? JSON.stringify(cfg, null, 2) : '';
   $('#setup-status').textContent = cfg

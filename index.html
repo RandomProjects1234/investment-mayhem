@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Ledger City — Multiplayer Investing Sim</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=1.10">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📈</text></svg>">
 <script src="firebase-config.js"></script>
 </head>
@@ -14,7 +14,7 @@
 <div id="setup" class="setup" hidden>
   <div class="setup-card">
     <h1>Ledger City</h1>
-    <div class="ver-line">version <b>v1.1</b></div>
+    <div class="ver-line">version <b>v1.10</b> &middot; <button id="cl-open" class="linkish inline">what's new</button></div>
     <p class="tag">A multiplayer market simulation. 624 real listed companies, 10 index funds,
        260 properties, crypto, commodities and angel deals — all on one shared clock.</p>
     <p class="disclaimer">Ticker symbols and company names are real; <b>every price in this game is
@@ -224,8 +224,19 @@
   </div>
 </div>
 
-<div id="version" title="Ledger City build">v1.1</div>
+<button id="version" title="Update log">v1.10</button>
+
+<!-- ---------------- update log ---------------- -->
+<div id="changelog" hidden>
+  <div class="sheet">
+    <button id="cl-close" class="x">&times;</button>
+    <h1 class="cl-h">Ledger City</h1>
+    <div class="ver-line">update log &middot; <b id="cl-version">v1.10</b></div>
+    <div id="cl-next"></div>
+    <div id="cl-body"></div>
+  </div>
+</div>
 <div id="toast" hidden></div>
-<script type="module" src="js/main.js"></script>
+<script type="module" src="js/main.js?v=1.10"></script>
 </body>
 </html>
