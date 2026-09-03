@@ -1,6 +1,6 @@
 // Game state, rules and the main loop.
-import { generateCompanies, generateProperties, generateAlts, generateStartups,
-         startupOutcome, STARTUP_ROUND_TICKS, SECTORS } from './data.js';
+import { generateCompanies, generateFunds, generateProperties, generateAlts,
+         generateStartups, startupOutcome, STARTUP_ROUND_TICKS, SECTORS } from './data.js';
 import { priceAt, priceNow, nowTick, TICK_MS, setFlow } from './market.js';
 import * as Net from './net.js';
 
@@ -9,7 +9,9 @@ export const PROP_CLOSING = 0.03;    // 3% closing cost on property purchase
 export const START_CASH = 100000;
 
 // ---- universe (generated once) ----------------------------------------
-export const COMPANIES = generateCompanies(640);
+export const STOCKS = generateCompanies();
+export const FUNDS = generateFunds(STOCKS);
+export const COMPANIES = [...STOCKS, ...FUNDS];   // everything on the Stocks tab
 export const PROPERTIES = generateProperties(260);
 export const ALTS = generateAlts();
 export const ASSETS = new Map();
@@ -27,9 +29,18 @@ export const state = {
   alts: {},       // altId   -> { units, cost }
   startups: {},   // startupId -> { name, amount, risk, matureTick, resolved, payout }
   stats: { trades: 0, realized: 0, rentCollected: 0, dividends: 0 },
+  watch: {},      // assetId -> true, the player's watchlist
+  nwHistory: [],  // [tick, netWorth] samples for the portfolio chart
   netWorth: START_CASH, lastDividend: Date.now(),
   log: [],
 };
+
+export function toggleWatch(id) {
+  if (state.watch[id]) delete state.watch[id]; else state.watch[id] = true;
+  saveLocal();
+  return !!state.watch[id];
+}
+export const isWatched = id => !!state.watch[id];
 
 const LS_KEY = () => 'is_save_' + (Net.Net.uid || 'solo');
 
@@ -52,6 +63,7 @@ export function adopt(remote) {
   state.props = remote.props || {};
   state.alts = remote.alts || {};
   state.startups = remote.startups || {};
+  state.watch = remote.watch || state.watch || {};
   state.stats = Object.assign(state.stats, remote.stats || {});
 }
 
@@ -119,6 +131,18 @@ export function buy(assetId, units) {
   Net.postFeed({ act: 'buy', sym: a.ticker, units, px: +px.toFixed(4), name: state.name });
   log('Bought ' + fmtUnits(units) + ' ' + a.ticker + ' @ ' + fmt(px), true);
   return { ok: true, msg: 'Bought ' + fmtUnits(units) + ' ' + a.ticker + ' for ' + fmt(cost) };
+}
+
+// Buy a dollar amount rather than a unit count. Whole shares for stocks and
+// funds, fractional units for crypto and commodities.
+export function buyValue(assetId, dollars) {
+  const a = ASSETS.get(assetId);
+  if (!a || !(dollars > 0)) return { ok: false, msg: 'Enter an amount.' };
+  const px = priceNow(a) * (1 + FEE);
+  const raw = dollars / px;
+  const units = a.kind === 'alt' ? raw : Math.floor(raw);
+  if (!(units > 0)) return { ok: false, msg: 'That is less than one share of ' + a.ticker + '.' };
+  return buy(assetId, units);
 }
 
 export function sell(assetId, units) {
@@ -287,12 +311,22 @@ export function receiveInbox(items) {
 let onTickCb = () => {};
 export function onTick(cb) { onTickCb = cb; }
 
-let lastSave = 0, lastCloud = 0;
+let lastSave = 0, lastCloud = 0, lastSample = 0;
+
+// One net-worth sample every 15s, keeping the last ~2 hours for the chart.
+function sampleNetWorth() {
+  const now = Date.now();
+  if (now - lastSample < 15000) return;
+  lastSample = now;
+  state.nwHistory.push([Math.round(now / 1000), Math.round(state.netWorth)]);
+  if (state.nwHistory.length > 480) state.nwHistory.splice(0, state.nwHistory.length - 480);
+}
 export function startLoop() {
   const step = () => {
     resolveStartups();
     payDividends();
     netWorth();
+    sampleNetWorth();
     onTickCb();
     const now = Date.now();
     if (now - lastSave > 5000) { saveLocal(); lastSave = now; }

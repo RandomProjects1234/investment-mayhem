@@ -162,4 +162,22 @@ main{padding:16px 20px 60px;max-width:1500px;margin:0 auto}
 .ver-line{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.08em;margin-bottom:10px}
 .ver-line b{color:var(--accent);font-weight:600}
 
+/* ---------- v1.1 additions ---------- */
+.disclaimer{font-size:11px;line-height:1.5;color:#8a94a6;background:#0e1520;border:1px solid var(--line);
+  border-radius:10px;padding:9px 11px;margin:0 0 16px}
+.disclaimer b{color:#c3ceda}
+#nw-chart{width:100%;height:130px;margin-top:6px}
+.nwdelta{font-family:var(--mono);font-size:12px}
+.arow .sym{display:flex;align-items:center;gap:8px}
+.symtext{min-width:0;overflow:hidden}
+.star{background:none;border:none;padding:0 2px;font-size:14px;line-height:1;color:#3d4d61;border-radius:4px;flex:none}
+.star:hover{background:none;border:none;color:#6c7f96}
+.star.on{color:#ffc23a}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px;margin-bottom:14px}
+.heat{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:7px 9px;border-radius:8px;
+  border:1px solid var(--line);text-align:left}
+.heat b{font-size:11px;font-weight:600}
+.heat span{font-family:var(--mono);font-size:11px;opacity:.85}
+.heat.up{color:#bdf5d8} .heat.down{color:#ffc6cb}
+
 [hidden]{display:none !important}

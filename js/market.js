@@ -16,7 +16,7 @@ const EVENT_TAU = 70;       // decay constant, in ticks
 
 // ---- broad market ------------------------------------------------------
 export function marketFactor(t) {
-  return fbm(MKT_SEED, t / 260, 4) * 0.30 + fbm(MKT_SEED + 31, t / 900, 2) * 0.22;
+  return fbm(MKT_SEED, t / 260, 4) * 0.15 + fbm(MKT_SEED + 31, t / 900, 2) * 0.13;
 }
 
 function sectorSeed(sectorId) {
@@ -33,7 +33,7 @@ const secSeed = id => {
 
 export function sectorFactor(sectorId, t) {
   const s = secSeed(sectorId);
-  return fbm(s, t / 170, 3) * 0.26 + eventEffect(s ^ 0x7a5, t, 0.10, 0.55);
+  return fbm(s, t / 170, 3) * 0.13 + eventEffect(s ^ 0x7a5, t, 0.09, 0.26);
 }
 
 // ---- discrete shock events --------------------------------------------
@@ -68,7 +68,7 @@ export function recentEvents(assets, sectors, t, limit = 24) {
     for (let k = 0; k < 10; k++) {
       const slot = slot0 - k;
       if (hashF(seed, slot) < 0.10) {
-        const mag = (hashF(seed ^ 0x1234, slot) - 0.45) * 2 * 0.55;
+        const mag = (hashF(seed ^ 0x1234, slot) - 0.45) * 2 * 0.26;
         out.push({ tick: slot * EVENT_SLOT, mag, text: sec.name + ' ' + phrase(mag, SEC_GOOD, SEC_BAD, slot ^ seed), scope: 'sector' });
       }
     }
@@ -78,7 +78,7 @@ export function recentEvents(assets, sectors, t, limit = 24) {
     for (let k = 0; k < 6; k++) {
       const slot = slot0 - k;
       if (hashF(seed, slot) < 0.045) {
-        const mag = (hashF(seed ^ 0x1234, slot) - 0.45) * 2 * 0.42;
+        const mag = (hashF(seed ^ 0x1234, slot) - 0.45) * 2 * 0.30;
         out.push({ tick: slot * EVENT_SLOT, mag, text: a.name + ' (' + a.ticker + ') ' + phrase(mag, GOOD, BAD, slot ^ a.seed), scope: 'stock', id: a.id });
       }
     }
@@ -100,20 +100,28 @@ export function setFlow(obj) { FLOW = obj || Object.create(null); }
 export function flowOf(id) { return FLOW[id] || 0; }
 export function flowImpact(asset) {
   const net = FLOW[asset.id] || 0;
-  const scale = asset.kind === 'stock' ? (asset.floatShares || 1e9) / 4e5
+  const scale = (asset.kind === 'stock' || asset.kind === 'fund') ? (asset.floatShares || 1e9) / 4e5
               : asset.kind === 'alt' ? 4000 : 25;
   return Math.tanh(net / scale) * 0.22;   // capped at +/-22%
 }
 
 // ---- price -------------------------------------------------------------
-export function priceAt(asset, t) {
+// Prices without the multiplayer flow term are memoised: charts ask for the
+// same (asset, tick) pairs over and over, and funds re-read their members.
+const pxCache = new Map();
+
+function rawPrice(asset, t) {
+  const key = asset.id + '|' + t;
+  const hit = pxCache.get(key);
+  if (hit !== undefined) return hit;
+
   let logMul;
   if (asset.kind === 'stock') {
     logMul = marketFactor(t) * asset.beta
       + sectorFactor(asset.sector, t) * asset.secBeta
-      + fbm(asset.seed, t / (45 / asset.speed), 4) * asset.vol * 0.55
+      + fbm(asset.seed, t / (45 / asset.speed), 4) * asset.vol * 0.45
       + fbm(asset.seed ^ 0x2f, t / (7 / asset.speed), 2) * asset.vol * 0.22
-      + eventEffect(asset.seed ^ 0x99, t, 0.045, 0.42);
+      + eventEffect(asset.seed ^ 0x99, t, 0.045, 0.30);
   } else if (asset.kind === 'alt') {
     logMul = marketFactor(t) * asset.beta
       + fbm(asset.seed, t / (70 / asset.speed), 5) * asset.vol
@@ -124,8 +132,23 @@ export function priceAt(asset, t) {
       + fbm(asset.seed, t / (900 / asset.speed), 3) * asset.vol * 3
       + eventEffect(asset.seed ^ 0x99, t, 0.02, 0.35);
   }
-  const p = asset.base * Math.exp(logMul) * (1 + flowImpact(asset));
-  return Math.max(asset.base * 0.01, p);
+  const p = Math.max(asset.base * 0.01, asset.base * Math.exp(logMul));
+  if (pxCache.size > 60000) pxCache.clear();
+  pxCache.set(key, p);
+  return p;
+}
+
+// A fund is worth what its holdings are worth: the weighted average of how far
+// each member has moved from its own starting price.
+function fundPrice(asset, t) {
+  let ratio = 0;
+  for (const m of asset.members) ratio += m.w * (priceAt(m.asset, t) / m.asset.base);
+  return asset.base * ratio;
+}
+
+export function priceAt(asset, t) {
+  const raw = asset.kind === 'fund' ? fundPrice(asset, t) : rawPrice(asset, t);
+  return raw * (1 + flowImpact(asset));
 }
 
 export function priceNow(asset) { return priceAt(asset, nowTick()); }
@@ -145,5 +168,5 @@ export function history(asset, points = 120, step = 4) {
 
 // Index of the whole market, for the header.
 export function marketIndex(t) {
-  return 1000 * Math.exp(marketFactor(t) * 1.1);
+  return 1000 * Math.exp(marketFactor(t) * 1.6);
 }

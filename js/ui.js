@@ -54,7 +54,7 @@ function refresh() {
   $('#hdr-rent').textContent = G.fmt(G.pendingRent());
 
   if (UI.tab === 'portfolio') renderPortfolio();
-  else if (UI.tab === 'stocks') tickStockRows();
+  else if (UI.tab === 'stocks') { tickStockRows(); renderSectorStrip(); }
   else if (UI.tab === 'property') tickPropRows();
   else if (UI.tab === 'alts') tickAltRows();
   else if (UI.tab === 'angel') tickAngel();
@@ -89,6 +89,7 @@ function renderPortfolio() {
     legend.appendChild(s);
   }
   $('#alloc').appendChild(legend);
+  drawNwChart();
 
   const st = G.state.stats;
   $('#stat-realized').textContent = G.fmt(st.realized);
@@ -155,6 +156,55 @@ function renderPortfolio() {
   }
 }
 
+// Net worth over time, sampled every 15s by the game loop.
+function drawNwChart() {
+  const cv = $('#nw-chart');
+  const hist = G.state.nwHistory || [];
+  const pts = hist.map(h => h[1]).concat([G.state.netWorth]);
+  const note = $('#nw-note');
+  if (pts.length < 3) {
+    cv.hidden = true; note.hidden = false;
+    return;
+  }
+  cv.hidden = false; note.hidden = true;
+  const first = pts[0], last = pts[pts.length - 1];
+  $('#nw-delta').textContent = (last >= first ? '+' : '') + G.fmt(last - first) +
+    '  ' + G.fmtPct(first > 0 ? (last - first) / first * 100 : 0);
+  $('#nw-delta').className = 'nwdelta ' + cls(last - first);
+  drawChart(cv, pts, { flat: G.START_CASH });
+}
+
+// ---------------- sector heat strip ----------------
+let stripCache = -1;
+function renderSectorStrip() {
+  const t = nowTick();
+  if (t - stripCache < 8 && $('#sector-strip').children.length) return;
+  stripCache = t;
+  const box = $('#sector-strip');
+  box.innerHTML = '';
+  for (const sec of SECTORS) {
+    if (sec.id === 'fund') continue;
+    const members = G.STOCKS.filter(a => a.sector === sec.id);
+    if (!members.length) continue;
+    let sum = 0, n = 0;
+    for (let i = 0; i < members.length; i += Math.max(1, Math.floor(members.length / 12))) {
+      sum += changePct(members[i]); n++;
+    }
+    const avg = n ? sum / n : 0;
+    const b = el('button', 'heat ' + cls(avg));
+    const strength = Math.min(1, Math.abs(avg) / 12);
+    b.style.background = (avg >= 0 ? 'rgba(57,211,138,' : 'rgba(255,95,109,') + (0.10 + strength * 0.5) + ')';
+    b.innerHTML = '<b>' + sec.name + '</b><span>' + G.fmtPct(avg) + '</span>';
+    b.addEventListener('click', () => {
+      const sel = $('#f-sector');
+      sel.value = stockState.sector === sec.id ? 'all' : sec.id;
+      stockState.sector = sel.value; stockState.limit = 60;
+      renderStockRows();
+    });
+    box.appendChild(b);
+  }
+}
+
 // ---------------- news ----------------
 let newsCache = { tick: -1, html: '' };
 function renderNews() {
@@ -162,8 +212,8 @@ function renderNews() {
   if (t - newsCache.tick < 10) { return; }
   newsCache.tick = t;
   const sample = [];
-  for (let i = 0; i < G.COMPANIES.length; i += 7) sample.push(G.COMPANIES[i]);
-  const evs = recentEvents(sample, SECTORS, t, 18);
+  for (let i = 0; i < G.STOCKS.length; i += 7) sample.push(G.STOCKS[i]);
+  const evs = recentEvents(sample, SECTORS.filter(x => x.id !== 'fund'), t, 18);
   const box = $('#news'); box.innerHTML = '';
   for (const e of evs) {
     const d = el('div', 'newsitem ' + cls(e.mag));
@@ -181,6 +231,8 @@ let stockRows = [];
 
 function buildStocksControls() {
   const sel = $('#f-sector');
+  sel.appendChild(new Option('★ Watchlist', '_watch'));
+  sel.appendChild(new Option('Owned', '_own'));
   for (const s of SECTORS) sel.appendChild(new Option(s.name, s.id));
   sel.addEventListener('change', () => { stockState.sector = sel.value; stockState.limit = 60; renderStockRows(); });
   $('#f-search').addEventListener('input', e => { stockState.q = e.target.value.trim().toLowerCase(); stockState.limit = 60; renderStockRows(); });
@@ -191,7 +243,9 @@ function buildStocksControls() {
 function filteredCompanies() {
   const { q, sector, sort } = stockState;
   let list = G.COMPANIES;
-  if (sector !== 'all') list = list.filter(a => a.sector === sector);
+  if (sector === '_watch') list = list.filter(a => G.isWatched(a.id));
+  else if (sector === '_own') list = list.filter(a => G.state.holdings[a.id]);
+  else if (sector !== 'all') list = list.filter(a => a.sector === sector);
   if (q) list = list.filter(a => a.ticker.toLowerCase().includes(q) || a.name.toLowerCase().includes(q));
   const t = nowTick();
   if (sort === 'gain') list = [...list].sort((a, b) => changePct(b) - changePct(a));
@@ -203,6 +257,7 @@ function filteredCompanies() {
 }
 
 function renderStockRows() {
+  renderSectorStrip();
   const list = filteredCompanies();
   const shown = list.slice(0, stockState.limit);
   $('#f-count').textContent = list.length + ' listed';
@@ -217,7 +272,9 @@ function makeAssetRow(a, body, withSpark) {
   const row = el('div', 'row arow');
   const sec = SECTOR_BY_ID[a.sector];
   row.innerHTML =
-    '<div class="c sym"><b>' + a.ticker + '</b><span>' + a.name + '</span></div>' +
+    '<div class="c sym"><button class="star' + (G.isWatched(a.id) ? ' on' : '') +
+      '" title="Add to watchlist">★</button>' +
+      '<span class="symtext"><b>' + a.ticker + '</b><span>' + a.name + '</span></span></div>' +
     '<div class="c tag">' + (sec ? '<i style="background:' + sec.color + '"></i>' + sec.name : (a.class || '')) + '</div>' +
     '<div class="c num px"></div>' +
     '<div class="c num ch"></div>' +
@@ -228,6 +285,11 @@ function makeAssetRow(a, body, withSpark) {
     cv.width = 120; cv.height = 30; row.querySelector('.spark').appendChild(cv);
     row._canvas = cv;
   }
+  const star = row.querySelector('.star');
+  if (star) star.addEventListener('click', e => {
+    e.stopPropagation();
+    star.classList.toggle('on', G.toggleWatch(a.id));
+  });
   row.addEventListener('click', () => openAsset(a.id));
   body.appendChild(row);
   return { a, row, px: row.querySelector('.px'), ch: row.querySelector('.ch'), own: row.querySelector('.own'), lastSpark: 0 };
@@ -430,7 +492,15 @@ function sendChatMsg() {
 }
 
 // ---------------- asset modal ----------------
-let modalAsset = null;
+let modalAsset = null, tradeMode = 'units';
+
+function setTradeMode(mode) {
+  tradeMode = mode;
+  const a = modalAsset;
+  $('#m-mode').textContent = mode === 'cash' ? '$ amount' : 'Quantity';
+  $('#m-qty').placeholder = mode === 'cash' ? 'Dollars to spend' : 'Number of units';
+  if (a) $('#m-qty').value = mode === 'cash' ? '1000' : (a.kind === 'alt' ? '1' : '1');
+}
 function openAsset(id) {
   const a = G.ASSETS.get(id);
   if (!a) return;
@@ -445,16 +515,28 @@ function openAsset(id) {
   $('#m-proptrade').hidden = !isProp;
   if (!isProp) {
     $('#m-qty').value = '1';
-    $('#m-buy').onclick = () => { toast(G.buy(a.id, Number($('#m-qty').value)).msg); refresh(); };
-    $('#m-sell').onclick = () => { toast(G.sell(a.id, Number($('#m-qty').value)).msg); refresh(); };
+    setTradeMode(tradeMode);
+    $('#m-mode').onclick = () => setTradeMode(tradeMode === 'units' ? 'cash' : 'units');
+    $('#m-buy').onclick = () => {
+      const v = Number($('#m-qty').value);
+      toast((tradeMode === 'cash' ? G.buyValue(a.id, v) : G.buy(a.id, v)).msg);
+      refresh();
+    };
+    $('#m-sell').onclick = () => {
+      let units = Number($('#m-qty').value);
+      if (tradeMode === 'cash') units = units / priceNow(a);
+      toast(G.sell(a.id, units).msg); refresh();
+    };
     $('#m-max').onclick = () => {
+      if (tradeMode === 'cash') { $('#m-qty').value = Math.floor(G.state.cash); return; }
       const px = priceNow(a) * (1 + G.FEE);
       $('#m-qty').value = a.kind === 'alt' ? (G.state.cash / px).toFixed(4) : String(Math.floor(G.state.cash / px));
     };
     $('#m-all').onclick = () => {
       const book = a.kind === 'alt' ? G.state.alts : G.state.holdings;
       const pos = book[a.id];
-      $('#m-qty').value = pos ? String(pos[a.kind === 'alt' ? 'units' : 'shares']) : '0';
+      const q = pos ? pos[a.kind === 'alt' ? 'units' : 'shares'] : 0;
+      $('#m-qty').value = tradeMode === 'cash' ? Math.floor(q * priceNow(a)) : String(q);
     };
   } else {
     $('#m-pbuy').onclick = () => { toast(G.buyProperty(a.id).msg); refresh(); tickModal(); };
@@ -474,7 +556,11 @@ function tickModal() {
   drawChart($('#m-chart'), history(a, 160, a.kind === 'property' ? 12 : 4));
 
   const facts = [];
-  if (a.kind === 'stock') {
+  if (a.kind === 'fund') {
+    facts.push(['Type', 'Index fund'], ['Holdings', a.holdings + ' companies'],
+      ['Distribution', a.div.toFixed(2) + '% / yr'],
+      ['Top holding', a.members[0].asset.ticker + ' (' + (a.members[0].w * 100).toFixed(1) + '%)']);
+  } else if (a.kind === 'stock') {
     facts.push(['Market cap', G.fmt(px * a.floatShares)], ['Class', a.cap],
       ['Dividend', a.div ? a.div.toFixed(2) + '% / yr' : 'none'],
       ['Volatility', (a.vol * 100).toFixed(0)], ['Beta', a.beta.toFixed(2)]);
@@ -523,7 +609,7 @@ function drawSpark(cv, data, up) {
   ctx.lineWidth = 1.4; ctx.stroke();
 }
 
-function drawChart(cv, data) {
+function drawChart(cv, data, opts = {}) {
   const dpr = window.devicePixelRatio || 1;
   const w = cv.clientWidth || 620, h = cv.clientHeight || 220;
   if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
@@ -555,6 +641,15 @@ function drawChart(cv, data) {
   ctx.strokeStyle = color; ctx.lineWidth = 1.8; ctx.stroke();
   ctx.lineTo(X(data.length - 1), h - 18); ctx.lineTo(X(0), h - 18); ctx.closePath();
   ctx.fillStyle = grad; ctx.fill();
+
+  // Optional reference line (e.g. the starting bankroll on the net worth chart).
+  if (opts.flat != null && opts.flat > lo && opts.flat < hi) {
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(6, Y(opts.flat)); ctx.lineTo(w - 48, Y(opts.flat)); ctx.stroke();
+    ctx.restore();
+  }
 }
 
 // ---------------- misc ----------------

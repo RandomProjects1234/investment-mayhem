@@ -14,9 +14,11 @@
 <div id="setup" class="setup" hidden>
   <div class="setup-card">
     <h1>Ledger City</h1>
-    <div class="ver-line">version <b>v1.0</b></div>
-    <p class="tag">A multiplayer market simulation. 640 companies, 260 properties, crypto,
-       commodities and angel deals — all running on a shared clock.</p>
+    <div class="ver-line">version <b>v1.1</b></div>
+    <p class="tag">A multiplayer market simulation. 624 real listed companies, 10 index funds,
+       260 properties, crypto, commodities and angel deals — all on one shared clock.</p>
+    <p class="disclaimer">Ticker symbols and company names are real; <b>every price in this game is
+       simulated</b> and has no relationship to the actual market. Not financial advice.</p>
     <label>Username</label>
     <input id="name" maxlength="16" placeholder="e.g. tycoon_01" autocomplete="off">
     <div class="setup-actions">
@@ -62,8 +64,10 @@
     <section class="panel" id="panel-portfolio">
       <div class="grid2">
         <div class="card">
-          <h2>Allocation</h2>
+          <h2>Allocation <small id="nw-delta" class="nwdelta"></small></h2>
           <div id="alloc"></div>
+          <canvas id="nw-chart" height="130" hidden></canvas>
+          <div id="nw-note" class="hint">Your net worth curve appears here after a minute of trading.</div>
           <div class="statgrid">
             <div><span>Realised P/L</span><b id="stat-realized" class="v">$0</b></div>
             <div><span>Trades</span><b id="stat-trades" class="v">0</b></div>
@@ -97,6 +101,7 @@
     <!-- stocks -->
     <section class="panel" id="panel-stocks" hidden>
       <div class="card">
+        <div id="sector-strip" class="strip"></div>
         <div class="controls">
           <input id="f-search" placeholder="Search ticker or company">
           <select id="f-sector"><option value="all">All sectors</option></select>
@@ -205,6 +210,7 @@
     <canvas id="m-chart" height="220"></canvas>
     <div id="m-facts" class="facts"></div>
     <div id="m-trade" class="trade">
+      <button id="m-mode" class="mini" title="Switch between quantity and dollar amount">Quantity</button>
       <input id="m-qty" type="number" step="any" min="0">
       <button id="m-max" class="mini">Max</button>
       <button id="m-all" class="mini">All owned</button>
@@ -218,7 +224,7 @@
   </div>
 </div>
 
-<div id="version" title="Ledger City build">v1.0</div>
+<div id="version" title="Ledger City build">v1.1</div>
 <div id="toast" hidden></div>
 <script type="module" src="js/main.js"></script>
 </body>
