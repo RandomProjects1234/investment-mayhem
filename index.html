@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ledger City — Multiplayer Investing Sim</title>
-<link rel="stylesheet" href="style.css?v=1.20">
+<title>Investment Mayhem — Multiplayer Investing Sim</title>
+<link rel="stylesheet" href="style.css?v=1.21">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📈</text></svg>">
 <script src="firebase-config.js"></script>
 </head>
@@ -13,8 +13,8 @@
 <!-- ---------------- setup / login ---------------- -->
 <div id="setup" class="setup" hidden>
   <div class="setup-card">
-    <h1>Ledger City</h1>
-    <div class="ver-line">version <b>v1.20</b> &middot; <button id="cl-open" class="linkish inline">what's new</button></div>
+    <h1>Investment Mayhem</h1>
+    <div class="ver-line">version <b>v1.21</b> &middot; <button id="cl-open" class="linkish inline">what's new</button></div>
     <p class="tag">A multiplayer market simulation. 624 real listed companies, 10 index funds,
        260 properties, crypto, commodities and angel deals — all on one shared clock.</p>
     <p class="disclaimer">Ticker symbols and company names are real; <b>every price in this game is
@@ -42,11 +42,11 @@
 <!-- ---------------- app ---------------- -->
 <div id="app" hidden>
   <header>
-    <div class="brand">Ledger&nbsp;City</div>
+    <div class="brand">Investment&nbsp;Mayhem</div>
     <div class="stat"><span>Net worth</span><b id="hdr-net">$0</b></div>
     <div class="stat"><span>Cash</span><b id="hdr-cash">$0</b></div>
     <div class="stat"><span>Rent due</span><b id="hdr-rent">$0</b></div>
-    <div class="stat"><span>LC Index</span><b id="hdr-index">0</b> <i id="hdr-index-ch" class="delta"></i></div>
+    <div class="stat"><span>Mayhem Index</span><b id="hdr-index">0</b> <i id="hdr-index-ch" class="delta"></i></div>
     <div class="spacer"></div>
     <div class="who"><span id="hdr-online" class="pill" hidden></span>
       <b id="hdr-name"></b><span id="status" class="pill">offline</span></div>
@@ -274,7 +274,7 @@
 </div>
 
 <button id="report-open" title="Report a bug">Report a bug</button>
-<button id="version" title="Update log">v1.20</button>
+<button id="version" title="Update log">v1.21</button>
 
 <!-- ---------------- bug report ---------------- -->
 <div id="report" hidden>
@@ -307,13 +307,13 @@
 <div id="changelog" hidden>
   <div class="sheet">
     <button id="cl-close" class="x">&times;</button>
-    <h1 class="cl-h">Ledger City</h1>
-    <div class="ver-line">update log &middot; <b id="cl-version">v1.20</b></div>
+    <h1 class="cl-h">Investment Mayhem</h1>
+    <div class="ver-line">update log &middot; <b id="cl-version">v1.21</b></div>
     <div id="cl-next"></div>
     <div id="cl-body"></div>
   </div>
 </div>
 <div id="toast" hidden></div>
-<script type="module" src="js/main.js?v=1.20"></script>
+<script type="module" src="js/main.js?v=1.21"></script>
 </body>
 </html>

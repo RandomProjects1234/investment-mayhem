@@ -1,10 +1,16 @@
 # Changelog
 
-All notable changes to [Ledger City](https://randomprojects1234.github.io/ledger-city/). Current build: **v1.20**.
+All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v1.21**.
 
 This file is generated from `js/changelog.js`, which is also what the in-game
 update log reads — click the version badge in the corner. Edit that file, then
 run `node tools/release.mjs`.
+
+## v1.21 — Investment Mayhem
+*2026-09-03*
+
+- **New** — The game is now called Investment Mayhem. New name in the header, the tab title and the market index; the site moved to /investment-mayhem/ and the old link redirects.
+- **Fix** — Saves, watchlists and cloud profiles carry across the rename untouched. The world seed is deliberately unchanged, so every property and collectible is the same one you owned yesterday.
 
 ## v1.20 — Bonds, savings, collectibles and bug reports
 *2026-09-03*

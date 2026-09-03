@@ -1,6 +1,6 @@
-# Ledger City — a multiplayer investing sim on GitHub Pages
+# Investment Mayhem — a multiplayer investing sim on GitHub Pages
 
-**Play it: <https://randomprojects1234.github.io/ledger-city/>** &nbsp;·&nbsp; version **v1.20** &nbsp;·&nbsp; [changelog](CHANGELOG.md) &nbsp;·&nbsp; [roadmap](ROADMAP.md)
+**Play it: <https://randomprojects1234.github.io/investment-mayhem/>** &nbsp;·&nbsp; version **v1.21** &nbsp;·&nbsp; [changelog](CHANGELOG.md) &nbsp;·&nbsp; [roadmap](ROADMAP.md)
 
 Pure static frontend (HTML + CSS + ES modules, no build step) with Firebase
 Realtime Database as the only backend. **624 real listed companies** across 11
@@ -49,7 +49,7 @@ ES modules need HTTP — `file://` will not work.
 python -m http.server 3491
 ```
 
-Then open <http://localhost:3491>. (Windows: `Start Ledger City.bat` in the parent folder.)
+Then open <http://localhost:3491>. (Windows: `Start Investment Mayhem.bat` in the parent folder.)
 
 ## Deploying to GitHub Pages
 

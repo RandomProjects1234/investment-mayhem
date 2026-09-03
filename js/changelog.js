@@ -1,9 +1,18 @@
 // Release history and roadmap. Rendered in-game (click the version badge) and
 // mirrored in CHANGELOG.md / ROADMAP.md so the repo tells the same story.
 
-export const VERSION = 'v1.20';
+export const VERSION = 'v1.21';
 
 export const RELEASES = [
+  {
+    version: 'v1.21',
+    date: '2026-09-03',
+    title: 'Investment Mayhem',
+    items: [
+      ['new', 'The game is now called Investment Mayhem. New name in the header, the tab title and the market index; the site moved to /investment-mayhem/ and the old link redirects.'],
+      ['fix', 'Saves, watchlists and cloud profiles carry across the rename untouched. The world seed is deliberately unchanged, so every property and collectible is the same one you owned yesterday.'],
+    ],
+  },
   {
     version: 'v1.20',
     date: '2026-09-03',

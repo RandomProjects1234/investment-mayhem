@@ -12,14 +12,14 @@ import { RELEASES, NEXT, VERSION } from '../js/changelog.js';
 
 const root = new URL('../', import.meta.url);
 const LABEL = { new: 'New', bal: 'Tuning', fix: 'Fix' };
-const PLAY = 'https://randomprojects1234.github.io/ledger-city/';
+const PLAY = 'https://randomprojects1234.github.io/investment-mayhem/';
 const V = VERSION.replace(/^v/, '');
 
 // ---- docs ----------------------------------------------------------------
 const changelog = [
   '# Changelog',
   '',
-  `All notable changes to [Ledger City](${PLAY}). Current build: **${VERSION}**.`,
+  `All notable changes to [Investment Mayhem](${PLAY}). Current build: **${VERSION}**.`,
   '',
   'This file is generated from `js/changelog.js`, which is also what the in-game',
   'update log reads — click the version badge in the corner. Edit that file, then',

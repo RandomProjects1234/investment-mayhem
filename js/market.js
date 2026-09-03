@@ -4,7 +4,7 @@
 // plus one shared multiplayer term (net player flow, read from Firebase).
 // Because the tick index comes from wall-clock time, every browser in the world
 // draws the same chart without any server doing the simulating.
-import { fbm, hashF, clamp } from './rng.js?v=1.20';
+import { fbm, hashF, clamp } from './rng.js?v=1.21';
 
 export const TICK_MS = 3000;               // one market tick = 3 real seconds
 export const nowTick = () => Math.floor(Date.now() / TICK_MS);
