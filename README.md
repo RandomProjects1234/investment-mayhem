@@ -1,12 +1,12 @@
 # Investment Mayhem — a multiplayer investing sim on GitHub Pages
 
-**Play it: <https://randomprojects1234.github.io/investment-mayhem/>** &nbsp;·&nbsp; version **v1.4** &nbsp;·&nbsp; [changelog](CHANGELOG.md) &nbsp;·&nbsp; [roadmap](ROADMAP.md)
+**Play it: <https://randomprojects1234.github.io/investment-mayhem/>** &nbsp;·&nbsp; version **v1.5** &nbsp;·&nbsp; [changelog](CHANGELOG.md) &nbsp;·&nbsp; [roadmap](ROADMAP.md)
 
 Pure static frontend (HTML + CSS + ES modules, no build step) with Firebase
 Realtime Database as the only backend. **624 real listed companies** across 11
 sectors, 10 index funds priced from their own holdings, 260 properties, 8 bonds
 driven by a policy rate, a savings account, 24 cryptocurrencies, 18 commodities,
-24 collectible lots, and a rotating slate of angel deals.
+24 collectible lots, 54 national economies, and a rotating slate of angel deals.
 
 > **Simulated market.** Ticker symbols and company names are real, and each one
 > starts from a rough, rounded price and market cap taken from a 2025-era
@@ -126,6 +126,10 @@ architecture does not change.
 - **Savings** — cash parked at the bank earns the policy rate minus 0.6, never at risk.
 - **Collectibles** — 24 lots of art, watches, cards, wine and curiosities. Slow, almost
   uncorrelated with equities, and sold 9% below the quoted value because they are illiquid.
+- **Countries** — 54 national economies quoted at GDP per capita. Each compounds at its
+  own growth rate on a slow clock (four real hours per simulated year, eased with a tanh so
+  nothing runs away) and pays a yield every minute. Rich economies grow slowly and pay more.
+  This one came from a player bug report.
 - **Players** — live net-worth leaderboard, presence (who is online now), trade tape, chat,
   and cash/asset transfers by username.
 - **Bug reports** — the "Report a bug" button files a report to the server for the developer
@@ -166,6 +170,12 @@ Versions run `1.4`, `1.5`, … `1.9`, `2.0`, `2.1` — plain increments, no `1.1
 
 Step 2's import stamping is not cosmetic: browsers cache ES modules hard, and without it a
 deploy can leave a player running a mix of old and new files.
+
+## Mobile
+
+The tables, header and tab bar have a dedicated layout under 600px: each table keeps the
+three columns that matter on a phone, and the tab bar scrolls horizontally. Tested at
+384x695, the screen a real report came in from.
 
 ## Reading bug reports
 

@@ -1,10 +1,25 @@
 # Changelog
 
-All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v1.4**.
+All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v1.5**.
 
 This file is generated from `js/changelog.js`, which is also what the in-game
 update log reads — click the version badge in the corner. Edit that file, then
 run `node tools/release.mjs`.
+
+## v1.5 — Countries, phones, and the first player report
+*2026-09-03*
+
+- **New** — Invest in countries. 54 national economies, quoted at GDP per capita, compounding at that country growth rate and paying a yield every minute. Rich economies grow slowly and pay more; emerging ones do the opposite. Straight from a player report by Yesman: invest in every single country, and invest in their GDP per capita.
+- **New** — A real phone layout. The same report came from a 384 pixel screen, so the header, the tab bar and every table now have a narrow layout instead of a squeezed desktop one. Each table keeps the three columns that matter and the tab bar scrolls.
+- **New** — The portfolio now shows coupons, savings interest and sovereign yield alongside dividends, so every income stream is visible.
+- **Fix** — Cash could end a trade at a value like -0.0000000001, which the security rules reject, silently stopping every cloud save from then on. It is clamped now, and the status pill says "cloud save failing" if the server ever refuses a write instead of quietly pretending.
+- **Fix** — Going online for the first time no longer replaces your solo game with a fresh 100,000. Your solo progress comes with you.
+- **Fix** — A transfer could be credited twice if the delete that clears it failed. Claimed transfers are now remembered.
+- **Fix** — A failed sign-in left the game believing it was connected, so solo play kept trying to write to the server.
+- **Fix** — Two collectibles shared the ticker FIRST, which made them ambiguous when sending assets by ticker. Collectible tickers are unique now.
+- **Fix** — The presence heartbeat could stack up duplicate timers on a reconnect.
+- **Fix** — A country detail window said "undefined" where its type should be, and its chart was drawn over too short a window to show anything but noise.
+- **Tuning** — Country shocks toned down. An economy should not move like a meme coin.
 
 ## v1.4 — Investment Mayhem, and multiplayer is live
 *2026-09-03*

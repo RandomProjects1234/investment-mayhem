@@ -1,9 +1,9 @@
 // Game state, rules and the main loop.
 import { generateCompanies, generateFunds, generateProperties, generateAlts,
-         generateBonds, generateCollectibles, generateStartups, startupOutcome,
-         STARTUP_ROUND_TICKS, COLLECT_SPREAD, SECTORS } from './data.js?v=1.4';
-import { priceAt, priceNow, nowTick, TICK_MS, policyRate, setFlow } from './market.js?v=1.4';
-import * as Net from './net.js?v=1.4';
+         generateBonds, generateCollectibles, generateCountries, generateStartups, startupOutcome,
+         STARTUP_ROUND_TICKS, COLLECT_SPREAD, SECTORS } from './data.js?v=1.5';
+import { priceAt, priceNow, nowTick, TICK_MS, policyRate, setFlow } from './market.js?v=1.5';
+import * as Net from './net.js?v=1.5';
 
 export const FEE = 0.002;            // 0.2% trading commission
 export const PROP_CLOSING = 0.03;    // 3% closing cost on property purchase
@@ -18,8 +18,9 @@ export const PROPERTIES = generateProperties(260);
 export const ALTS = generateAlts();
 export const BONDS = generateBonds();
 export const COLLECTIBLES = generateCollectibles();
+export const COUNTRIES = generateCountries();
 export const ASSETS = new Map();
-for (const a of [...COMPANIES, ...PROPERTIES, ...ALTS, ...BONDS, ...COLLECTIBLES]) ASSETS.set(a.id, a);
+for (const a of [...COMPANIES, ...PROPERTIES, ...ALTS, ...BONDS, ...COLLECTIBLES, ...COUNTRIES]) ASSETS.set(a.id, a);
 Net.registerKeys([...ASSETS.keys()]);
 
 export const startupRound = () => Math.floor(nowTick() / STARTUP_ROUND_TICKS);
@@ -34,10 +35,11 @@ function blankState() {
     alts: {},       // crypto and commodities -> { units, cost }
     bonds: {},      // bonds -> { units, cost }
     collect: {},    // collectibles -> { units, cost }
+    countries: {},  // country stakes -> { units, cost }
     props: {},      // property id -> { price, bought, lastCollect }
     startups: {},   // startup id -> { name, amount, risk, matureTick, resolved, payout }
     savings: { balance: 0, last: Date.now() },
-    stats: { trades: 0, realized: 0, rentCollected: 0, dividends: 0, coupons: 0, interest: 0 },
+    stats: { trades: 0, realized: 0, rentCollected: 0, dividends: 0, coupons: 0, interest: 0, sovereign: 0 },
     watch: {}, nwHistory: [],
     netWorth: START_CASH, lastDividend: Date.now(),
     log: [], savedAt: 0,
@@ -52,6 +54,7 @@ export function bookOf(asset) {
     case 'alt':     return { book: state.alts, key: 'units' };
     case 'bond':    return { book: state.bonds, key: 'units' };
     case 'collect': return { book: state.collect, key: 'units' };
+    case 'country': return { book: state.countries, key: 'units' };
     case 'stock':
     case 'fund':    return { book: state.holdings, key: 'shares' };
     default:        return { book: null, key: 'units' };
@@ -60,7 +63,7 @@ export function bookOf(asset) {
 
 // You sell collectibles below the quoted value: they are illiquid.
 export const spreadOf = asset => asset && asset.kind === 'collect' ? COLLECT_SPREAD : 0;
-export const isFractional = asset => asset && (asset.kind === 'alt');
+export const isFractional = asset => asset && (asset.kind === 'alt' || asset.kind === 'country');
 
 export function toggleWatch(id) {
   if (state.watch[id]) delete state.watch[id]; else state.watch[id] = true;
@@ -91,7 +94,7 @@ export function saveLocal() {
 // positions whose asset no longer exists so value can never vanish silently.
 export function migrate() {
   const blank = blankState();
-  for (const k of ['holdings', 'alts', 'bonds', 'collect', 'props', 'startups', 'watch']) {
+  for (const k of ['holdings', 'alts', 'bonds', 'collect', 'countries', 'props', 'startups', 'watch']) {
     if (!state[k] || typeof state[k] !== 'object') state[k] = {};
   }
   if (!Array.isArray(state.nwHistory)) state.nwHistory = [];
@@ -102,7 +105,7 @@ export function migrate() {
   if (!state.lastDividend) state.lastDividend = Date.now();
 
   let refunded = 0;
-  for (const bookName of ['holdings', 'alts', 'bonds', 'collect']) {
+  for (const bookName of ['holdings', 'alts', 'bonds', 'collect', 'countries']) {
     for (const id of Object.keys(state[bookName])) {
       if (ASSETS.has(id)) continue;
       refunded += state[bookName][id].cost || 0;
@@ -120,6 +123,24 @@ export function migrate() {
   }
 }
 
+// Going online for the first time: your solo game comes with you rather than
+// being silently replaced by a fresh $100,000.
+export function importSoloSave() {
+  try {
+    const raw = localStorage.getItem('is_save_solo');
+    if (!raw) return false;
+    const solo = JSON.parse(raw);
+    if (!solo || typeof solo.cash !== 'number') return false;
+    const name = state.name;
+    Object.assign(state, solo);
+    state.name = name || solo.name;
+    migrate();
+    log('Brought your solo progress online', true);
+    saveLocal();
+    return true;
+  } catch (e) { return false; }
+}
+
 export function adopt(remote) {
   if (!remote) return;
   // The cloud save wins only if it is actually newer than what is on this
@@ -134,6 +155,7 @@ export function adopt(remote) {
   state.alts = remote.alts || {};
   state.bonds = remote.bonds || {};
   state.collect = remote.collect || {};
+  state.countries = remote.countries || {};
   state.props = remote.props || {};
   state.startups = remote.startups || {};
   state.savings = remote.savings || state.savings;
@@ -167,12 +189,16 @@ export function positionsValue() {
   const alt = bookValue(state.alts);
   const bonds = bookValue(state.bonds);
   const collect = bookValue(state.collect) * (1 - COLLECT_SPREAD);  // valued at what you could get
+  const countries = bookValue(state.countries);
   const savings = state.savings.balance;
-  return { stocks, property, alt, bonds, collect, angel, savings,
-           total: stocks + property + alt + bonds + collect + angel + savings };
+  return { stocks, property, alt, bonds, collect, countries, angel, savings,
+           total: stocks + property + alt + bonds + collect + countries + angel + savings };
 }
 
 export function netWorth() {
+  // Rounding can leave cash at -1e-12 after a trade. The security rules require
+  // cash >= 0, so that tiny negative would make every cloud save fail silently.
+  if (state.cash < 0 && state.cash > -0.01) state.cash = 0;
   state.netWorth = state.cash + positionsValue().total;
   return state.netWorth;
 }
@@ -391,10 +417,17 @@ function payIncome() {
     if (!a) continue;
     coupons += state.bonds[id].units * a.par * (a.coupon / 100) * (minutes / 52);
   }
+  let sovereign = 0;
+  for (const id in state.countries) {
+    const a = ASSETS.get(id);
+    if (!a) continue;
+    sovereign += state.countries[id].units * priceNow(a) * (a.yield / 100) * (minutes / 52);
+  }
   accrueInterest();
 
   if (divs > 0.01) { state.cash += divs; state.stats.dividends += divs; }
   if (coupons > 0.01) { state.cash += coupons; state.stats.coupons += coupons; }
+  if (sovereign > 0.01) { state.cash += sovereign; state.stats.sovereign += sovereign; }
 }
 
 // ---- transfers ---------------------------------------------------------
@@ -429,9 +462,15 @@ export async function transferShares(username, assetId, units) {
   return { ok: true, msg: 'Sent ' + fmtUnits(units) + ' ' + a.ticker + ' to ' + username };
 }
 
+const claimedInbox = new Set();
+
 export function receiveInbox(items) {
   const claimed = [];
   for (const it of items) {
+    // The inbox listener refires until the delete lands; without this guard a
+    // failed delete would credit the same transfer again.
+    if (claimedInbox.has(it.key)) { claimed.push(it.key); continue; }
+    claimedInbox.add(it.key);
     if (it.type === 'cash' && it.amount > 0) {
       state.cash += it.amount;
       log('Received ' + fmt(it.amount) + ' from ' + (it.fromName || 'a player'), true);

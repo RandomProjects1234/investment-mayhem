@@ -1,9 +1,27 @@
 // Release history and roadmap. Rendered in-game (click the version badge) and
 // mirrored in CHANGELOG.md / ROADMAP.md so the repo tells the same story.
 
-export const VERSION = 'v1.4';
+export const VERSION = 'v1.5';
 
 export const RELEASES = [
+  {
+    version: 'v1.5',
+    date: '2026-09-03',
+    title: 'Countries, phones, and the first player report',
+    items: [
+      ['new', 'Invest in countries. 54 national economies, quoted at GDP per capita, compounding at that country growth rate and paying a yield every minute. Rich economies grow slowly and pay more; emerging ones do the opposite. Straight from a player report by Yesman: invest in every single country, and invest in their GDP per capita.'],
+      ['new', 'A real phone layout. The same report came from a 384 pixel screen, so the header, the tab bar and every table now have a narrow layout instead of a squeezed desktop one. Each table keeps the three columns that matter and the tab bar scrolls.'],
+      ['new', 'The portfolio now shows coupons, savings interest and sovereign yield alongside dividends, so every income stream is visible.'],
+      ['fix', 'Cash could end a trade at a value like -0.0000000001, which the security rules reject, silently stopping every cloud save from then on. It is clamped now, and the status pill says "cloud save failing" if the server ever refuses a write instead of quietly pretending.'],
+      ['fix', 'Going online for the first time no longer replaces your solo game with a fresh 100,000. Your solo progress comes with you.'],
+      ['fix', 'A transfer could be credited twice if the delete that clears it failed. Claimed transfers are now remembered.'],
+      ['fix', 'A failed sign-in left the game believing it was connected, so solo play kept trying to write to the server.'],
+      ['fix', 'Two collectibles shared the ticker FIRST, which made them ambiguous when sending assets by ticker. Collectible tickers are unique now.'],
+      ['fix', 'The presence heartbeat could stack up duplicate timers on a reconnect.'],
+      ['fix', 'A country detail window said "undefined" where its type should be, and its chart was drawn over too short a window to show anything but noise.'],
+      ['bal', 'Country shocks toned down. An economy should not move like a meme coin.'],
+    ],
+  },
   {
     version: 'v1.4',
     date: '2026-09-03',
@@ -82,7 +100,7 @@ export const RELEASES = [
 
 // What the next update is aiming at. Ordered by what would change the game most.
 export const NEXT = {
-  version: 'v1.5',
+  version: 'v1.6',
   title: 'Orders and leverage',
   items: [
     ['Limit and stop orders',
@@ -93,8 +111,8 @@ export const NEXT = {
      'Borrow against your portfolio at an interest rate tied to the policy rate that now exists, with a maintenance requirement and a real margin call.'],
     ['An earnings calendar',
      'Company shocks currently arrive unannounced. Scheduling them per company and showing the date turns news from weather into something you can trade ahead of.'],
-    ['Everything reported since v1.4',
-     'Bug reports are read before every release. Whatever comes in through the report button gets triaged here and fixed items are listed in this log.'],
+    ['Everything reported since v1.5',
+     'Reports are read before every release. The country market in v1.5 came from one; keep them coming through the Report a bug button and they get triaged here.'],
     ['Portfolio analytics',
      'Best and worst trade, per-sector exposure, return against the index rather than against zero.'],
   ],

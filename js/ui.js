@@ -1,11 +1,11 @@
 // All DOM rendering. Rows are built once per filter change and only their
 // number cells are rewritten on each tick, so 640 stocks stay smooth.
-import * as G from './game.js?v=1.4';
+import * as G from './game.js?v=1.5';
 import { priceNow, priceAt, changePct, history, nowTick, marketIndex,
-         recentEvents, flowOf, flowImpact, policyRate, bondYield } from './market.js?v=1.4';
-import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=1.4';
-import * as Net from './net.js?v=1.4';
-import { RELEASES, NEXT, VERSION } from './changelog.js?v=1.4';
+         recentEvents, flowOf, flowImpact, policyRate, bondYield } from './market.js?v=1.5';
+import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=1.5';
+import * as Net from './net.js?v=1.5';
+import { RELEASES, NEXT, VERSION } from './changelog.js?v=1.5';
 
 const $ = s => document.querySelector(s);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -82,6 +82,7 @@ function boot() {
   buildStocksControls();
   buildPropControls();
   buildBank();
+  buildCountries();
   buildTransfer();
   const rent2 = $('#p-collect2');
   if (rent2) rent2.addEventListener('click', e => {
@@ -98,6 +99,7 @@ function buildTab() {
   if (UI.tab === 'property') renderPropRows();
   if (UI.tab === 'alts') { renderAltRows(); renderCollectRows(); }
   if (UI.tab === 'bank') renderBank();
+  if (UI.tab === 'countries') renderCountryRows();
   if (UI.tab === 'angel') renderAngel();
   if (UI.tab === 'social') { renderLeaderboard(); renderFeed(); renderChat(); }
   refresh();
@@ -121,14 +123,35 @@ function refresh() {
   else if (UI.tab === 'property') tickPropRows();
   else if (UI.tab === 'alts') { tickAltRows(); tickCollectRows(); }
   else if (UI.tab === 'bank') tickBank();
+  else if (UI.tab === 'countries') tickCountryRows();
   else if (UI.tab === 'angel') tickAngel();
   if (modalAsset) tickModal();
+  refreshSaveStatus();
   renderNews();
 }
 
 function setStatus(text, on) {
   $('#status').textContent = text;
   $('#status').className = 'pill ' + (on ? 'ok' : 'warn');
+  statusBase = { text, on };
+}
+
+let statusBase = { text: 'offline', on: false };
+
+// If the cloud has started rejecting saves, say so rather than looking fine.
+function refreshSaveStatus() {
+  if (!Net.Net.online) return;
+  const err = Net.SaveState.lastError;
+  const pill = $('#status');
+  if (err) {
+    pill.textContent = 'cloud save failing';
+    pill.className = 'pill warn';
+    pill.title = err;
+  } else if (pill.textContent === 'cloud save failing') {
+    pill.textContent = statusBase.text;
+    pill.className = 'pill ' + (statusBase.on ? 'ok' : 'warn');
+    pill.title = '';
+  }
 }
 
 // ---------------- portfolio ----------------
@@ -139,7 +162,8 @@ function renderPortfolio() {
   const parts = [['Cash', G.state.cash, '#6b7a8f'], ['Savings', v.savings, '#4fc3c3'],
     ['Stocks', v.stocks, '#5b8cff'], ['Bonds', v.bonds, '#9b7bff'],
     ['Property', v.property, '#39d38a'], ['Alternatives', v.alt, '#ffb03a'],
-    ['Collectibles', v.collect, '#d98cff'], ['Angel', v.angel, '#f2618c']];
+    ['Collectibles', v.collect, '#d98cff'], ['Countries', v.countries, '#ffd166'],
+    ['Angel', v.angel, '#f2618c']];
   const total = Math.max(1, G.state.netWorth);
   const bar = el('div', 'allocbar');
   for (const [name, val, color] of parts) {
@@ -163,6 +187,9 @@ function renderPortfolio() {
   $('#stat-trades').textContent = st.trades;
   $('#stat-rent').textContent = G.fmt(st.rentCollected);
   $('#stat-div').textContent = G.fmt(st.dividends);
+  $('#stat-coupons').textContent = G.fmt(st.coupons || 0);
+  $('#stat-interest').textContent = G.fmt(st.interest || 0);
+  $('#stat-sovereign').textContent = G.fmt(st.sovereign || 0);
 
   // Holdings tables rebuild at most twice a second; they are small.
   if (Date.now() - lastPortfolioBuild < 500) return;
@@ -175,7 +202,7 @@ function renderPortfolio() {
     const pos = G.state.holdings[id], px = priceNow(a), val = pos.shares * px;
     rows.push({ a, label: a.ticker, sub: a.name, qty: pos.shares, px, val, pl: val - pos.cost, cost: pos.cost });
   }
-  for (const bookName of ['alts', 'bonds', 'collect']) {
+  for (const bookName of ['alts', 'bonds', 'collect', 'countries']) {
     for (const id in G.state[bookName]) {
       const a = G.ASSETS.get(id); if (!a) continue;
       const pos = G.state[bookName][id];
@@ -412,6 +439,74 @@ function tickCollectRows() {
     if (r.row._canvas && t - r.lastSpark >= 4) {
       r.lastSpark = t;
       drawSpark(r.row._canvas, history(r.a, 40, 40), c >= 0);
+    }
+  }
+}
+
+// ---------------- countries ----------------
+// Added because a player asked for it: "invest in every single country's
+// government - you can invest in their GDP per capita".
+const countryState = { q: '', sort: 'gdp' };
+let countryRows = [];
+
+function buildCountries() {
+  $('#c-search').addEventListener('input', e => {
+    countryState.q = e.target.value.trim().toLowerCase(); renderCountryRows();
+  });
+  $('#c-sort').addEventListener('change', e => {
+    countryState.sort = e.target.value; renderCountryRows();
+  });
+}
+
+function renderCountryRows() {
+  let list = G.COUNTRIES;
+  if (countryState.q) {
+    const q = countryState.q;
+    list = list.filter(a => a.name.toLowerCase().includes(q) || a.ticker.toLowerCase().includes(q));
+  }
+  const sort = countryState.sort;
+  list = [...list].sort(
+    sort === 'growth' ? (a, b) => b.growth - a.growth
+    : sort === 'yield' ? (a, b) => b.yield - a.yield
+    : sort === 'change' ? (a, b) => changePct(b, 600) - changePct(a, 600)
+    : sort === 'name' ? (a, b) => a.name.localeCompare(b.name)
+    : (a, b) => priceNow(b) - priceNow(a));
+
+  $('#c-count').textContent = list.length + ' economies';
+  const body = $('#country-body'); body.innerHTML = '';
+  countryRows = list.map(a => {
+    const row = el('div', 'row crow');
+    row.innerHTML =
+      '<div class="c sym"><b>' + a.ticker + '</b><span>' + a.name + '</span></div>' +
+      '<div class="c num px"></div>' +
+      '<div class="c num">' + a.growth.toFixed(1) + '%</div>' +
+      '<div class="c num">' + a.yield.toFixed(1) + '%</div>' +
+      '<div class="c num ch"></div>' +
+      '<div class="c spark"></div>' +
+      '<div class="c num own"></div>';
+    const cv = document.createElement('canvas');
+    cv.width = 120; cv.height = 30; row.querySelector('.spark').appendChild(cv);
+    row._canvas = cv;
+    row.addEventListener('click', () => openAsset(a.id));
+    body.appendChild(row);
+    return { a, row, px: row.querySelector('.px'), ch: row.querySelector('.ch'),
+             own: row.querySelector('.own'), lastSpark: 0 };
+  });
+  tickCountryRows();
+}
+
+function tickCountryRows() {
+  const t = nowTick();
+  for (const r of countryRows) {
+    r.px.textContent = G.fmt(priceNow(r.a));
+    const c = changePct(r.a, 600);
+    r.ch.textContent = G.fmtPct(c);
+    r.ch.className = 'c num ch ' + cls(c);
+    const pos = G.state.countries[r.a.id];
+    r.own.textContent = pos ? G.fmtUnits(pos.units) : '';
+    if (r.row._canvas && t - r.lastSpark >= 4) {
+      r.lastSpark = t;
+      drawSpark(r.row._canvas, history(r.a, 40, 30), c >= 0);
     }
   }
 }
@@ -743,7 +838,12 @@ function openAsset(id) {
   $('#m-title').textContent = a.name;
   $('#m-sub').textContent = a.kind === 'property'
     ? a.regionName + ' · ' + a.typeName
-    : a.ticker + ' · ' + (SECTOR_BY_ID[a.sector] ? SECTOR_BY_ID[a.sector].name : a.class);
+    : a.ticker + ' · ' + (
+        a.kind === 'country' ? 'National economy'
+        : a.kind === 'bond' ? 'Bond'
+        : a.kind === 'collect' ? a.className
+        : SECTOR_BY_ID[a.sector] ? SECTOR_BY_ID[a.sector].name
+        : a.class || 'Asset');
   const isProp = a.kind === 'property';
   $('#m-trade').hidden = isProp;
   $('#m-proptrade').hidden = !isProp;
@@ -789,15 +889,21 @@ function closeModal() { $('#modal').hidden = true; modalAsset = null; }
 function tickModal() {
   const a = modalAsset; if (!a) return;
   const px = priceNow(a);
-  $('#m-price').textContent = (a.kind === 'property' || a.kind === 'collect' || px >= 1000)
+  $('#m-price').textContent = (a.kind === 'property' || a.kind === 'collect' || a.kind === 'country' || px >= 1000)
     ? G.fmt(px) : G.fmtPx(px);
   const c = changePct(a, a.kind === 'property' ? 900 : 400);
   $('#m-change').textContent = G.fmtPct(c);
   $('#m-change').className = 'm-change ' + cls(c);
-  drawChart($('#m-chart'), history(a, 160, a.kind === 'property' ? 12 : 4));
+  // Slow assets need a longer window or the chart is just noise.
+  const step = a.kind === 'property' ? 12 : a.kind === 'country' ? 24 : a.kind === 'collect' ? 30 : 4;
+  drawChart($('#m-chart'), history(a, 160, step));
 
   const facts = [];
-  if (a.kind === 'bond') {
+  if (a.kind === 'country') {
+    facts.push(['GDP per capita', G.fmt(px)], ['Starting level', G.fmt(a.base)],
+      ['Growth', a.growth.toFixed(1) + '% / yr'], ['Yield', a.yield.toFixed(1) + '% / yr'],
+      ['Volatility', (a.vol * 100).toFixed(0)]);
+  } else if (a.kind === 'bond') {
     facts.push(['Coupon', a.coupon.toFixed(2) + '% / yr'],
       ['Current yield', bondYield(a, nowTick()).toFixed(2) + '%'],
       ['Duration', a.duration.toFixed(1) + ' years'],

@@ -6,8 +6,8 @@
 // to the real market. Properties, alt assets and startups are fictional and
 // generated procedurally from WORLD_SEED, so nothing needs to be stored server
 // side: every client rebuilds the identical universe in ~15ms.
-import { rngFrom, hash32, pick, rr, clamp } from './rng.js?v=1.4';
-import { SECTOR_ROWS, FUNDS } from './companies.js?v=1.4';
+import { rngFrom, hash32, pick, rr, clamp } from './rng.js?v=1.5';
+import { SECTOR_ROWS, FUNDS } from './companies.js?v=1.5';
 
 // Frozen on purpose. The seed decides every property, collectible and startup
 // in the world; changing it would rebuild them all and orphan saved holdings,
@@ -227,14 +227,110 @@ export function generateCollectibles() {
     ['Antique Sea Chart', 'odd', 15800], ['Studio Pottery Vase', 'odd', 4300],
   ];
   const CLASSES = { art: 'Art', watch: 'Watches', card: 'Cards', wine: 'Wine & spirits', odd: 'Curiosities' };
+  const usedTickers = new Set();
+  const uniqueTicker = name => {
+    const words = name.replace(/[^A-Za-z ]/g, '').split(/\s+/).filter(Boolean);
+    let t = (words[0] || 'LOT').toUpperCase().slice(0, 6);
+    for (let i = 1; usedTickers.has(t) && i < words.length; i++) {
+      t = ((words[0] || '').slice(0, 3) + words[i].slice(0, 3)).toUpperCase();
+    }
+    let n = 2;
+    while (usedTickers.has(t)) t = t.slice(0, 5) + (n++);
+    usedTickers.add(t);
+    return t;
+  };
   return defs.map(([name, cls, price]) => ({
     kind: 'collect', class: cls, className: CLASSES[cls],
     id: 'C:' + name.replace(/[^A-Za-z0-9]/g, '').slice(0, 18),
-    ticker: name.split(/[ ,]/)[0].toUpperCase().slice(0, 6),
+    ticker: uniqueTicker(name),
     name, base: price,
     vol: rr(rand, 0.12, 0.38), speed: rr(rand, 0.6, 1.4),
     seed: hash32('col:' + name) | 0,
   }));
+}
+
+// ---------------- Countries ----------------
+// Suggested by a player ("invest in every single country's government - you can
+// invest in their GDP per capita"). You buy a stake in a national economy: the
+// quote is its GDP per capita, it drifts with that country's growth rate, and it
+// pays a yield. Rich economies grow slowly and pay more; emerging ones are the
+// opposite. Figures are rough real-world 2024 numbers used as a starting point.
+// GROUP | name | GDP per capita | growth %/yr | volatility | yield %
+const COUNTRY_ROWS = `
+LUX|Luxembourg|128000|1.2|0.10|3.4
+IRL|Ireland|106000|3.4|0.20|2.4
+CHE|Switzerland|105000|1.3|0.09|2.9
+NOR|Norway|87000|1.4|0.15|4.1
+SGP|Singapore|85000|2.6|0.13|3.0
+USA|United States|85000|2.2|0.11|2.6
+ISL|Iceland|84000|2.0|0.16|3.2
+DNK|Denmark|68000|1.9|0.10|3.0
+AUS|Australia|65000|1.7|0.12|3.6
+NLD|Netherlands|64000|1.6|0.10|3.1
+AUT|Austria|56000|1.1|0.10|3.3
+SWE|Sweden|56000|1.8|0.13|3.2
+BEL|Belgium|55000|1.2|0.10|3.4
+CAN|Canada|54000|1.6|0.12|3.3
+DEU|Germany|54000|1.0|0.11|3.2
+ISR|Israel|53000|2.4|0.22|2.6
+FIN|Finland|53000|1.3|0.11|3.4
+GBR|United Kingdom|51000|1.4|0.12|3.5
+ARE|United Arab Emirates|49000|3.4|0.19|3.1
+NZL|New Zealand|47000|1.6|0.13|3.6
+FRA|France|46000|1.2|0.10|3.3
+ITA|Italy|39000|0.8|0.11|3.8
+KOR|South Korea|34000|2.3|0.15|2.4
+ESP|Spain|34000|1.9|0.13|3.5
+JPN|Japan|33000|0.9|0.11|2.6
+SAU|Saudi Arabia|32000|2.8|0.21|4.2
+CZE|Czechia|30000|2.3|0.15|3.1
+EST|Estonia|30000|2.4|0.18|3.0
+PRT|Portugal|28000|1.9|0.14|3.6
+GRC|Greece|23000|2.1|0.19|4.0
+POL|Poland|22000|3.3|0.16|2.9
+HUN|Hungary|22000|2.6|0.19|3.5
+URY|Uruguay|22000|2.4|0.20|3.8
+ROU|Romania|18000|3.6|0.19|3.4
+CHL|Chile|17000|2.4|0.21|3.9
+CHN|China|13000|4.6|0.22|2.0
+MYS|Malaysia|13000|4.2|0.20|3.2
+MEX|Mexico|13000|2.3|0.20|3.7
+TUR|Turkey|13000|3.4|0.34|4.6
+ARG|Argentina|13000|2.0|0.42|5.2
+RUS|Russia|14000|1.6|0.36|5.0
+BRA|Brazil|10000|2.4|0.26|4.4
+THA|Thailand|7500|3.0|0.20|3.4
+ZAF|South Africa|6300|1.4|0.27|4.8
+IDN|Indonesia|5000|5.0|0.21|3.0
+VNM|Vietnam|4500|6.2|0.24|2.6
+PHL|Philippines|4000|5.6|0.23|2.8
+EGY|Egypt|3500|4.2|0.34|4.9
+IND|India|2700|6.5|0.23|2.2
+BGD|Bangladesh|2600|5.8|0.27|3.0
+KEN|Kenya|2200|5.0|0.30|3.8
+NGA|Nigeria|1600|3.2|0.36|5.1
+PAK|Pakistan|1600|3.0|0.38|5.4
+ETH|Ethiopia|1300|6.0|0.35|3.6
+`;
+
+export function generateCountries() {
+  const out = [];
+  for (const line of COUNTRY_ROWS.split('\n')) {
+    const row = line.trim();
+    if (!row || row.indexOf('|') < 0) continue;
+    const [code, name, gdp, growth, vol, yld] = row.split('|');
+    const r = rngFrom('cty:' + code);
+    out.push({
+      kind: 'country', id: 'N:' + code, ticker: code, name,
+      base: parseFloat(gdp),
+      growth: parseFloat(growth),
+      vol: parseFloat(vol),
+      yield: parseFloat(yld),
+      speed: rr(r, 0.8, 1.3),
+      seed: hash32('cty:' + code) | 0,
+    });
+  }
+  return out;
 }
 
 // Angel investing: a rotating slate of startups, deterministic per round.

@@ -1,8 +1,8 @@
 // Entry point: login screen, Firebase wiring, then hand off to the game loop.
-import * as G from './game.js?v=1.4';
-import * as Net from './net.js?v=1.4';
-import { UI } from './ui.js?v=1.4';
-import { setFlow } from './market.js?v=1.4';
+import * as G from './game.js?v=1.5';
+import * as Net from './net.js?v=1.5';
+import { UI } from './ui.js?v=1.5';
+import { setFlow } from './market.js?v=1.5';
 
 const $ = s => document.querySelector(s);
 
@@ -78,11 +78,15 @@ async function start(online) {
       G.loadLocal();
       const remote = await Net.loadPlayer();
       if (remote) G.adopt(remote);
+      else G.importSoloSave();   // first time online: bring your solo game with you
       wireOnline();
       UI.setStatus('online as ' + name, true);
     } catch (e) {
       // A taken username is not a connection failure, and telling players it is
       // sends them off debugging the wrong thing.
+      // Sign-in may have succeeded before the username check failed; leaving the
+      // connection flag set would make solo play try to write to the cloud.
+      Net.Net.online = false;
       $('#setup-status').textContent = /taken/i.test(e.message)
         ? 'That username is already taken on this server. Pick another one.'
         : 'Could not connect: ' + e.message;

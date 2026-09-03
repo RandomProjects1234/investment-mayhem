@@ -85,6 +85,10 @@ export async function loadPlayer() {
   return snap.exists() ? snap.val() : null;
 }
 
+// Set by savePlayer so the UI can say when the cloud has stopped accepting
+// writes instead of pretending everything is fine.
+export const SaveState = { lastOk: 0, lastError: null };
+
 export async function savePlayer(state) {
   const { update, set } = Net._fb;
   const payload = {
@@ -93,14 +97,22 @@ export async function savePlayer(state) {
     updated: Date.now(), netWorth: state.netWorth || 0,
     holdings: state.holdings || {}, props: state.props || {},
     alts: state.alts || {}, bonds: state.bonds || {}, collect: state.collect || {},
+    countries: state.countries || {},
     savings: state.savings || { balance: 0, last: Date.now() },
     startups: state.startups || {}, lastDividend: state.lastDividend || Date.now(),
     watch: state.watch || {}, stats: state.stats || {},
   };
-  await update(R('players/' + Net.uid), payload);
-  await set(R('leaderboard/' + Net.uid), {
-    name: state.name, netWorth: Math.round(state.netWorth || 0), ts: Date.now(),
-  });
+  try {
+    await update(R('players/' + Net.uid), payload);
+    await set(R('leaderboard/' + Net.uid), {
+      name: state.name, netWorth: Math.round(state.netWorth || 0), ts: Date.now(),
+    });
+    SaveState.lastOk = Date.now();
+    SaveState.lastError = null;
+  } catch (e) {
+    SaveState.lastError = e.message || String(e);
+    throw e;
+  }
 }
 
 // ---- market flow (global multiplayer price impact) ---------------------
@@ -197,13 +209,15 @@ export async function clearInbox(keys) {
 // ---- presence ----------------------------------------------------------
 // Who is on the server right now. onDisconnect clears the entry server side,
 // so a closed tab does not leave a ghost behind.
+let presenceTimer = null;
 export function joinPresence(name) {
   if (!Net.online) return;
-  const { ref, set, onDisconnect, serverTimestamp } = Net._fb;
+  const { ref, set, onDisconnect } = Net._fb;
   const mine = ref(Net._db, 'presence/' + Net.uid);
   onDisconnect(mine).remove();
   set(mine, { name, ts: Date.now() }).catch(() => {});
-  setInterval(() => set(mine, { name, ts: Date.now() }).catch(() => {}), 60000);
+  if (presenceTimer) clearInterval(presenceTimer);   // never stack heartbeats
+  presenceTimer = setInterval(() => set(mine, { name, ts: Date.now() }).catch(() => {}), 60000);
 }
 
 export function watchPresence(cb) {

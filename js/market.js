@@ -4,10 +4,18 @@
 // plus one shared multiplayer term (net player flow, read from Firebase).
 // Because the tick index comes from wall-clock time, every browser in the world
 // draws the same chart without any server doing the simulating.
-import { fbm, hashF, clamp } from './rng.js?v=1.4';
+import { fbm, hashF, clamp } from './rng.js?v=1.5';
 
 export const TICK_MS = 3000;               // one market tick = 3 real seconds
 export const nowTick = () => Math.floor(Date.now() / TICK_MS);
+
+// Fixed reference point for anything that compounds over time, frozen at the
+// v1.5 release so every client agrees. Trading income runs on a fast clock (one
+// real minute stands in for a week), but a national economy has to grow on a
+// slow one, so countries use four real hours per simulated year.
+export const EPOCH_TICK = Math.floor(Date.UTC(2026, 8, 3) / TICK_MS);
+export const TICKS_PER_COUNTRY_YEAR = 4800;
+export const countryYears = t => Math.max(0, (t - EPOCH_TICK) / TICKS_PER_COUNTRY_YEAR);
 
 const MKT_SEED = 0x51ed | 0;
 const EVENT_SLOT = 10;      // events can only begin on ticks divisible by this
@@ -115,6 +123,7 @@ export function flowOf(id) { return FLOW[id] || 0; }
 export function flowImpact(asset) {
   const net = FLOW[asset.id] || 0;
   if (asset.kind === 'bond') return 0;   // rates set bond prices, not crowds
+  if (asset.kind === 'country') return Math.tanh((FLOW[asset.id] || 0) / 900) * 0.10;
   const scale = (asset.kind === 'stock' || asset.kind === 'fund') ? (asset.floatShares || 1e9) / 4e5
               : asset.kind === 'alt' ? 4000 : asset.kind === 'collect' ? 12 : 25;
   return Math.tanh(net / scale) * 0.22;   // capped at +/-22%
@@ -152,6 +161,18 @@ function rawPrice(asset, t) {
     if (pxCache.size > 60000) pxCache.clear();
     pxCache.set(key, p);
     return p;
+  } else if (asset.kind === 'country') {
+    // A national economy: a growth trend that saturates, plus a business cycle
+    // and the odd shock. Emerging economies grow faster and swing harder.
+    // tanh so growth eases off instead of hitting a wall, and no country can
+    // run away forever.
+    const raw = asset.growth / 100 * countryYears(t);
+    const drift = 1.5 * Math.tanh(raw / 1.5);
+    logMul = drift
+      + fbm(asset.seed, t / (320 / asset.speed), 3) * asset.vol
+      + fbm(asset.seed ^ 0x3d, t / (60 / asset.speed), 2) * asset.vol * 0.35
+      + marketFactor(t) * 0.25
+      + eventEffect(asset.seed ^ 0x99, t, 0.025, asset.vol * 0.9);
   } else if (asset.kind === 'collect') {
     // Collectibles barely notice the stock market. They drift for a long time
     // and then jump when a comparable sells at auction.

@@ -1,6 +1,6 @@
 # Roadmap
 
-## Next up — v1.5: Orders and leverage
+## Next up — v1.6: Orders and leverage
 
 ### Limit and stop orders
 
@@ -18,9 +18,9 @@ Borrow against your portfolio at an interest rate tied to the policy rate that n
 
 Company shocks currently arrive unannounced. Scheduling them per company and showing the date turns news from weather into something you can trade ahead of.
 
-### Everything reported since v1.4
+### Everything reported since v1.5
 
-Bug reports are read before every release. Whatever comes in through the report button gets triaged here and fixed items are listed in this log.
+Reports are read before every release. The country market in v1.5 came from one; keep them coming through the Report a bug button and they get triaged here.
 
 ### Portfolio analytics
 

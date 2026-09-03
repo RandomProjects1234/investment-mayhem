@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Investment Mayhem — Multiplayer Investing Sim</title>
-<link rel="stylesheet" href="style.css?v=1.4">
+<link rel="stylesheet" href="style.css?v=1.5">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📈</text></svg>">
-<script src="firebase-config.js?v=1.4"></script>
+<script src="firebase-config.js?v=1.5"></script>
 </head>
 <body>
 
@@ -14,7 +14,7 @@
 <div id="setup" class="setup" hidden>
   <div class="setup-card">
     <h1>Investment Mayhem</h1>
-    <div class="ver-line">version <b>v1.4</b> &middot; <button id="cl-open" class="linkish inline">what's new</button></div>
+    <div class="ver-line">version <b>v1.5</b> &middot; <button id="cl-open" class="linkish inline">what's new</button></div>
     <p class="tag">A multiplayer market simulation. 624 real listed companies, 10 index funds,
        260 properties, crypto, commodities and angel deals — all on one shared clock.</p>
     <p class="disclaimer">Ticker symbols and company names are real; <b>every price in this game is
@@ -60,6 +60,7 @@
     <button class="tab" data-tab="property">Real Estate</button>
     <button class="tab" data-tab="alts">Alternatives</button>
     <button class="tab" data-tab="bank">Bank &amp; Bonds</button>
+    <button class="tab" data-tab="countries">Countries</button>
     <button class="tab" data-tab="angel">Angel</button>
     <button class="tab" data-tab="social">Players</button>
   </nav>
@@ -78,6 +79,9 @@
             <div><span>Trades</span><b id="stat-trades" class="v">0</b></div>
             <div><span>Rent collected</span><b id="stat-rent" class="v">$0</b></div>
             <div><span>Dividends</span><b id="stat-div" class="v">$0</b></div>
+            <div><span>Coupons</span><b id="stat-coupons" class="v">$0</b></div>
+            <div><span>Interest</span><b id="stat-interest" class="v">$0</b></div>
+            <div><span>Sovereign yield</span><b id="stat-sovereign" class="v">$0</b></div>
           </div>
         </div>
         <div class="card">
@@ -200,6 +204,31 @@
       </div>
     </section>
 
+    <!-- countries -->
+    <section class="panel" id="panel-countries" hidden>
+      <div class="card">
+        <h2>National economies <small>suggested by a player</small></h2>
+        <p class="hint">Buy a stake in a country. The quote is its GDP per capita, it compounds at
+          that country&rsquo;s growth rate, and it pays you a yield every minute. Rich economies grow
+          slowly and pay more; emerging ones do the opposite. Fractional stakes allowed.</p>
+        <div class="controls">
+          <input id="c-search" placeholder="Search country">
+          <select id="c-sort">
+            <option value="gdp">Sort: GDP per capita</option>
+            <option value="growth">Sort: growth rate</option>
+            <option value="yield">Sort: yield</option>
+            <option value="change">Sort: recent change</option>
+            <option value="name">Sort: name</option>
+          </select>
+          <span id="c-count" class="count"></span>
+        </div>
+        <div class="row head crow"><div class="c sym">Country</div><div class="c num">GDP / capita</div>
+          <div class="c num">Growth</div><div class="c num">Yield</div><div class="c num">Change</div>
+          <div class="c spark">Trend</div><div class="c num">Owned</div></div>
+        <div id="country-body"></div>
+      </div>
+    </section>
+
     <!-- angel -->
     <section class="panel" id="panel-angel" hidden>
       <div class="card">
@@ -274,7 +303,7 @@
 </div>
 
 <button id="report-open" title="Report a bug">Report a bug</button>
-<button id="version" title="Update log">v1.4</button>
+<button id="version" title="Update log">v1.5</button>
 
 <!-- ---------------- bug report ---------------- -->
 <div id="report" hidden>
@@ -308,12 +337,12 @@
   <div class="sheet">
     <button id="cl-close" class="x">&times;</button>
     <h1 class="cl-h">Investment Mayhem</h1>
-    <div class="ver-line">update log &middot; <b id="cl-version">v1.4</b></div>
+    <div class="ver-line">update log &middot; <b id="cl-version">v1.5</b></div>
     <div id="cl-next"></div>
     <div id="cl-body"></div>
   </div>
 </div>
 <div id="toast" hidden></div>
-<script type="module" src="js/main.js?v=1.4"></script>
+<script type="module" src="js/main.js?v=1.5"></script>
 </body>
 </html>
