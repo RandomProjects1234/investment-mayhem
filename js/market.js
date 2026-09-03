@@ -4,7 +4,7 @@
 // plus one shared multiplayer term (net player flow, read from Firebase).
 // Because the tick index comes from wall-clock time, every browser in the world
 // draws the same chart without any server doing the simulating.
-import { fbm, hashF, clamp } from './rng.js';
+import { fbm, hashF, clamp } from './rng.js?v=1.20';
 
 export const TICK_MS = 3000;               // one market tick = 3 real seconds
 export const nowTick = () => Math.floor(Date.now() / TICK_MS);
@@ -92,6 +92,20 @@ function phrase(mag, good, bad, slot) {
   return list[Math.floor(hashF(0x5eed, slot) * list.length) % list.length];
 }
 
+// ---- interest rates ----------------------------------------------------
+// One policy rate drives every bond, the savings account, and (gently) the
+// market itself. It moves slowly, the way a central bank does.
+export function policyRate(t) {
+  return 3.9 + fbm(0x2717, t / 1400, 3) * 2.4 + fbm(0x2718, t / 380, 2) * 0.5;
+}
+
+export function bondYield(asset, t) {
+  const creditCycle = asset.credit
+    ? asset.credit * (1 + fbm(asset.seed ^ 0x5c, t / 500, 3) * 0.8)
+    : 0;
+  return policyRate(t) + creditCycle;
+}
+
 // ---- multiplayer flow --------------------------------------------------
 // /market/flow/{assetId} holds the net units bought by all players. It nudges
 // the price for everyone, so a crowded trade really does move the tape.
@@ -100,8 +114,9 @@ export function setFlow(obj) { FLOW = obj || Object.create(null); }
 export function flowOf(id) { return FLOW[id] || 0; }
 export function flowImpact(asset) {
   const net = FLOW[asset.id] || 0;
+  if (asset.kind === 'bond') return 0;   // rates set bond prices, not crowds
   const scale = (asset.kind === 'stock' || asset.kind === 'fund') ? (asset.floatShares || 1e9) / 4e5
-              : asset.kind === 'alt' ? 4000 : 25;
+              : asset.kind === 'alt' ? 4000 : asset.kind === 'collect' ? 12 : 25;
   return Math.tanh(net / scale) * 0.22;   // capped at +/-22%
 }
 
@@ -127,6 +142,22 @@ function rawPrice(asset, t) {
       + fbm(asset.seed, t / (70 / asset.speed), 5) * asset.vol
       + fbm(asset.seed ^ 0x2f, t / (9 / asset.speed), 3) * asset.vol * 0.5
       + eventEffect(asset.seed ^ 0x99, t, 0.055, asset.class === 'crypto' ? 0.85 : 0.5);
+  } else if (asset.kind === 'bond') {
+    // Price moves inversely with yield, scaled by duration. A 30-year bond
+    // loses roughly a fifth of its value when rates rise two points.
+    const y = bondYield(asset, t);
+    const px = asset.par * (1 + (asset.coupon - y) / 100 * asset.duration * 0.92)
+      * (1 + fbm(asset.seed, t / 90, 2) * 0.004);
+    const p = Math.max(asset.par * 0.25, Math.min(asset.par * 2.2, px));
+    if (pxCache.size > 60000) pxCache.clear();
+    pxCache.set(key, p);
+    return p;
+  } else if (asset.kind === 'collect') {
+    // Collectibles barely notice the stock market. They drift for a long time
+    // and then jump when a comparable sells at auction.
+    logMul = marketFactor(t) * 0.12
+      + fbm(asset.seed, t / (1300 / asset.speed), 3) * asset.vol * 1.8
+      + eventEffect(asset.seed ^ 0x99, t, 0.018, 0.55);
   } else { // property: slow, low-frequency, mildly correlated with the market
     logMul = marketFactor(t) * 0.35
       + fbm(asset.seed, t / (900 / asset.speed), 3) * asset.vol * 3

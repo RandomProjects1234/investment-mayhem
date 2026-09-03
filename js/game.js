@@ -1,12 +1,14 @@
 // Game state, rules and the main loop.
 import { generateCompanies, generateFunds, generateProperties, generateAlts,
-         generateStartups, startupOutcome, STARTUP_ROUND_TICKS, SECTORS } from './data.js';
-import { priceAt, priceNow, nowTick, TICK_MS, setFlow } from './market.js';
-import * as Net from './net.js';
+         generateBonds, generateCollectibles, generateStartups, startupOutcome,
+         STARTUP_ROUND_TICKS, COLLECT_SPREAD, SECTORS } from './data.js?v=1.20';
+import { priceAt, priceNow, nowTick, TICK_MS, policyRate, setFlow } from './market.js?v=1.20';
+import * as Net from './net.js?v=1.20';
 
 export const FEE = 0.002;            // 0.2% trading commission
 export const PROP_CLOSING = 0.03;    // 3% closing cost on property purchase
 export const START_CASH = 100000;
+export const MAX_OFFLINE_MIN = 240;  // income accrues for at most 4 hours away
 
 // ---- universe (generated once) ----------------------------------------
 export const STOCKS = generateCompanies();
@@ -14,26 +16,51 @@ export const FUNDS = generateFunds(STOCKS);
 export const COMPANIES = [...STOCKS, ...FUNDS];   // everything on the Stocks tab
 export const PROPERTIES = generateProperties(260);
 export const ALTS = generateAlts();
+export const BONDS = generateBonds();
+export const COLLECTIBLES = generateCollectibles();
 export const ASSETS = new Map();
-for (const a of [...COMPANIES, ...PROPERTIES, ...ALTS]) ASSETS.set(a.id, a);
+for (const a of [...COMPANIES, ...PROPERTIES, ...ALTS, ...BONDS, ...COLLECTIBLES]) ASSETS.set(a.id, a);
 Net.registerKeys([...ASSETS.keys()]);
 
 export const startupRound = () => Math.floor(nowTick() / STARTUP_ROUND_TICKS);
 export function currentStartups() { return generateStartups(startupRound()); }
+export const rateNow = () => policyRate(nowTick());
 
 // ---- player state ------------------------------------------------------
-export const state = {
-  name: null, cash: START_CASH, created: Date.now(),
-  holdings: {},   // ticker -> { shares, cost }
-  props: {},      // propId  -> { price, bought, lastCollect }
-  alts: {},       // altId   -> { units, cost }
-  startups: {},   // startupId -> { name, amount, risk, matureTick, resolved, payout }
-  stats: { trades: 0, realized: 0, rentCollected: 0, dividends: 0 },
-  watch: {},      // assetId -> true, the player's watchlist
-  nwHistory: [],  // [tick, netWorth] samples for the portfolio chart
-  netWorth: START_CASH, lastDividend: Date.now(),
-  log: [],
-};
+function blankState() {
+  return {
+    name: null, cash: START_CASH, created: Date.now(),
+    holdings: {},   // stocks and funds -> { shares, cost }
+    alts: {},       // crypto and commodities -> { units, cost }
+    bonds: {},      // bonds -> { units, cost }
+    collect: {},    // collectibles -> { units, cost }
+    props: {},      // property id -> { price, bought, lastCollect }
+    startups: {},   // startup id -> { name, amount, risk, matureTick, resolved, payout }
+    savings: { balance: 0, last: Date.now() },
+    stats: { trades: 0, realized: 0, rentCollected: 0, dividends: 0, coupons: 0, interest: 0 },
+    watch: {}, nwHistory: [],
+    netWorth: START_CASH, lastDividend: Date.now(),
+    log: [], savedAt: 0,
+  };
+}
+
+export const state = blankState();
+
+// Which book holds an asset, and what its quantity field is called.
+export function bookOf(asset) {
+  switch (asset && asset.kind) {
+    case 'alt':     return { book: state.alts, key: 'units' };
+    case 'bond':    return { book: state.bonds, key: 'units' };
+    case 'collect': return { book: state.collect, key: 'units' };
+    case 'stock':
+    case 'fund':    return { book: state.holdings, key: 'shares' };
+    default:        return { book: null, key: 'units' };
+  }
+}
+
+// You sell collectibles below the quoted value: they are illiquid.
+export const spreadOf = asset => asset && asset.kind === 'collect' ? COLLECT_SPREAD : 0;
+export const isFractional = asset => asset && (asset.kind === 'alt');
 
 export function toggleWatch(id) {
   if (state.watch[id]) delete state.watch[id]; else state.watch[id] = true;
@@ -42,56 +69,111 @@ export function toggleWatch(id) {
 }
 export const isWatched = id => !!state.watch[id];
 
+// ---- persistence -------------------------------------------------------
 const LS_KEY = () => 'is_save_' + (Net.Net.uid || 'solo');
 
 export function loadLocal() {
   try {
     const raw = localStorage.getItem(LS_KEY());
     if (raw) Object.assign(state, JSON.parse(raw));
-  } catch (e) { /* ignore */ }
+  } catch (e) { /* a corrupt save should never block the game */ }
+  migrate();
 }
+
 export function saveLocal() {
-  try { localStorage.setItem(LS_KEY(), JSON.stringify(state)); } catch (e) { /* ignore */ }
+  try {
+    state.savedAt = Date.now();
+    localStorage.setItem(LS_KEY(), JSON.stringify(state));
+  } catch (e) { /* quota or private mode: keep playing */ }
+}
+
+// Fills in anything a save from an older build is missing, and refunds
+// positions whose asset no longer exists so value can never vanish silently.
+export function migrate() {
+  const blank = blankState();
+  for (const k of ['holdings', 'alts', 'bonds', 'collect', 'props', 'startups', 'watch']) {
+    if (!state[k] || typeof state[k] !== 'object') state[k] = {};
+  }
+  if (!Array.isArray(state.nwHistory)) state.nwHistory = [];
+  if (!Array.isArray(state.log)) state.log = [];
+  if (!state.savings || typeof state.savings.balance !== 'number') state.savings = { balance: 0, last: Date.now() };
+  state.stats = Object.assign(blank.stats, state.stats || {});
+  if (typeof state.cash !== 'number' || !isFinite(state.cash)) state.cash = START_CASH;
+  if (!state.lastDividend) state.lastDividend = Date.now();
+
+  let refunded = 0;
+  for (const bookName of ['holdings', 'alts', 'bonds', 'collect']) {
+    for (const id of Object.keys(state[bookName])) {
+      if (ASSETS.has(id)) continue;
+      refunded += state[bookName][id].cost || 0;
+      delete state[bookName][id];
+    }
+  }
+  for (const id of Object.keys(state.props)) {
+    if (ASSETS.has(id)) continue;
+    refunded += state.props[id].price || 0;
+    delete state.props[id];
+  }
+  if (refunded > 0) {
+    state.cash += refunded;
+    log('Refunded ' + fmt(refunded) + ' for assets removed in an update', true);
+  }
 }
 
 export function adopt(remote) {
   if (!remote) return;
+  // The cloud save wins only if it is actually newer than what is on this
+  // device, so a refresh can never roll you back to an older snapshot.
+  const localAt = state.savedAt || 0;
+  const remoteAt = remote.updated || 0;
+  if (localAt > remoteAt + 2000 && state.name) { migrate(); return; }
   state.name = remote.name || state.name;
   state.cash = typeof remote.cash === 'number' ? remote.cash : state.cash;
   state.created = remote.created || state.created;
   state.holdings = remote.holdings || {};
-  state.props = remote.props || {};
   state.alts = remote.alts || {};
+  state.bonds = remote.bonds || {};
+  state.collect = remote.collect || {};
+  state.props = remote.props || {};
   state.startups = remote.startups || {};
+  state.savings = remote.savings || state.savings;
   state.watch = remote.watch || state.watch || {};
   state.stats = Object.assign(state.stats, remote.stats || {});
+  state.lastDividend = remote.lastDividend || state.lastDividend;
+  migrate();
 }
 
 // ---- valuation ---------------------------------------------------------
-export function positionsValue() {
-  let stocks = 0, property = 0, alt = 0, angel = 0;
-  for (const id in state.holdings) {
+function bookValue(book) {
+  let total = 0;
+  for (const id in book) {
     const a = ASSETS.get(id); if (!a) continue;
-    stocks += state.holdings[id].shares * priceNow(a);
+    const q = book[id].shares != null ? book[id].shares : book[id].units;
+    total += q * priceNow(a);
   }
+  return total;
+}
+
+export function positionsValue() {
+  let property = 0, angel = 0;
   for (const id in state.props) {
     const a = ASSETS.get(id); if (!a) continue;
     property += priceNow(a);
   }
-  for (const id in state.alts) {
-    const a = ASSETS.get(id); if (!a) continue;
-    alt += state.alts[id].units * priceNow(a);
-  }
   for (const id in state.startups) {
-    const s = state.startups[id];
-    if (!s.resolved) angel += s.amount;   // held at cost until it resolves
+    if (!state.startups[id].resolved) angel += state.startups[id].amount;
   }
-  return { stocks, property, alt, angel, total: stocks + property + alt + angel };
+  const stocks = bookValue(state.holdings);
+  const alt = bookValue(state.alts);
+  const bonds = bookValue(state.bonds);
+  const collect = bookValue(state.collect) * (1 - COLLECT_SPREAD);  // valued at what you could get
+  const savings = state.savings.balance;
+  return { stocks, property, alt, bonds, collect, angel, savings,
+           total: stocks + property + alt + bonds + collect + angel + savings };
 }
 
 export function netWorth() {
-  const v = positionsValue();
-  state.netWorth = state.cash + v.total;
+  state.netWorth = state.cash + positionsValue().total;
   return state.netWorth;
 }
 
@@ -101,8 +183,8 @@ export function pendingRent() {
   for (const id in state.props) {
     const a = ASSETS.get(id); if (!a) continue;
     const p = state.props[id];
-    const minutes = Math.max(0, (now - (p.lastCollect || now)) / 60000);
-    total += priceNow(a) * a.rentRate * (1 - a.upkeep) * Math.min(minutes, 720);
+    const minutes = Math.min(MAX_OFFLINE_MIN, Math.max(0, (now - (p.lastCollect || now)) / 60000));
+    total += priceNow(a) * a.rentRate * (1 - a.upkeep) * minutes;
   }
   return total;
 }
@@ -116,13 +198,15 @@ export const getLog = () => state.log;
 
 export function buy(assetId, units) {
   const a = ASSETS.get(assetId);
-  if (!a || !(units > 0)) return { ok: false, msg: 'Invalid order.' };
+  if (!a || !(units > 0) || !isFinite(units)) return { ok: false, msg: 'Invalid order.' };
+  const { book, key } = bookOf(a);
+  if (!book) return { ok: false, msg: 'That is not a tradable asset.' };
+  if (!isFractional(a)) units = Math.floor(units);
+  if (!(units > 0)) return { ok: false, msg: 'That is less than one unit of ' + a.ticker + '.' };
   const px = priceNow(a);
   const cost = px * units * (1 + FEE);
   if (cost > state.cash) return { ok: false, msg: 'Not enough cash (need ' + fmt(cost) + ').' };
   state.cash -= cost;
-  const book = a.kind === 'alt' ? state.alts : state.holdings;
-  const key = a.kind === 'alt' ? 'units' : 'shares';
   const pos = book[assetId] || { [key]: 0, cost: 0 };
   pos[key] += units; pos.cost += cost;
   book[assetId] = pos;
@@ -130,28 +214,28 @@ export function buy(assetId, units) {
   Net.bumpFlow(assetId, units);
   Net.postFeed({ act: 'buy', sym: a.ticker, units, px: +px.toFixed(4), name: state.name });
   log('Bought ' + fmtUnits(units) + ' ' + a.ticker + ' @ ' + fmt(px), true);
+  saveLocal();
   return { ok: true, msg: 'Bought ' + fmtUnits(units) + ' ' + a.ticker + ' for ' + fmt(cost) };
 }
 
-// Buy a dollar amount rather than a unit count. Whole shares for stocks and
-// funds, fractional units for crypto and commodities.
+// Buy a dollar amount rather than a unit count.
 export function buyValue(assetId, dollars) {
   const a = ASSETS.get(assetId);
   if (!a || !(dollars > 0)) return { ok: false, msg: 'Enter an amount.' };
   const px = priceNow(a) * (1 + FEE);
   const raw = dollars / px;
-  const units = a.kind === 'alt' ? raw : Math.floor(raw);
-  if (!(units > 0)) return { ok: false, msg: 'That is less than one share of ' + a.ticker + '.' };
-  return buy(assetId, units);
+  return buy(assetId, isFractional(a) ? raw : Math.floor(raw));
 }
 
 export function sell(assetId, units) {
   const a = ASSETS.get(assetId);
-  const book = a && a.kind === 'alt' ? state.alts : state.holdings;
-  const key = a && a.kind === 'alt' ? 'units' : 'shares';
-  const pos = book[assetId];
-  if (!a || !pos || !(units > 0) || units > pos[key] + 1e-9) return { ok: false, msg: 'You do not own that many.' };
-  const px = priceNow(a);
+  const { book, key } = bookOf(a);
+  const pos = book && book[assetId];
+  if (!a || !pos || !(units > 0)) return { ok: false, msg: 'You do not own that many.' };
+  if (!isFractional(a)) units = Math.floor(units);
+  if (units > pos[key] + 1e-9) units = pos[key];
+  if (!(units > 0)) return { ok: false, msg: 'You do not own that many.' };
+  const px = priceNow(a) * (1 - spreadOf(a));
   const gross = px * units * (1 - FEE);
   const basis = pos.cost * (units / pos[key]);
   pos.cost -= basis; pos[key] -= units;
@@ -161,7 +245,9 @@ export function sell(assetId, units) {
   state.stats.realized += gross - basis;
   Net.bumpFlow(assetId, -units);
   Net.postFeed({ act: 'sell', sym: a.ticker, units, px: +px.toFixed(4), name: state.name });
-  log('Sold ' + fmtUnits(units) + ' ' + a.ticker + ' @ ' + fmt(px) + ' (' + (gross - basis >= 0 ? '+' : '') + fmt(gross - basis) + ')', gross - basis >= 0);
+  log('Sold ' + fmtUnits(units) + ' ' + a.ticker + ' @ ' + fmt(px) +
+      ' (' + (gross - basis >= 0 ? '+' : '') + fmt(gross - basis) + ')', gross - basis >= 0);
+  saveLocal();
   return { ok: true, msg: 'Sold for ' + fmt(gross) };
 }
 
@@ -176,6 +262,7 @@ export function buyProperty(id) {
   Net.bumpFlow(id, 1);
   Net.postFeed({ act: 'buy', sym: 'PROPERTY', units: 1, px: +px.toFixed(0), name: state.name, extra: a.name });
   log('Bought ' + a.name + ' for ' + fmt(cost), true);
+  saveLocal();
   return { ok: true, msg: 'Purchased ' + a.name };
 }
 
@@ -189,6 +276,7 @@ export function sellProperty(id) {
   delete state.props[id];
   Net.bumpFlow(id, -1);
   log('Sold ' + a.name + ' for ' + fmt(px), px >= p.price);
+  saveLocal();
   return { ok: true, msg: 'Sold ' + a.name + ' for ' + fmt(px) };
 }
 
@@ -199,7 +287,7 @@ export function collectRent(only) {
     if (only && id !== only) continue;
     const a = ASSETS.get(id); if (!a) continue;
     const p = state.props[id];
-    const minutes = Math.min(720, Math.max(0, (now - (p.lastCollect || now)) / 60000));
+    const minutes = Math.min(MAX_OFFLINE_MIN, Math.max(0, (now - (p.lastCollect || now)) / 60000));
     total += priceNow(a) * a.rentRate * (1 - a.upkeep) * minutes;
     p.lastCollect = now;
   }
@@ -207,10 +295,50 @@ export function collectRent(only) {
     state.cash += total;
     state.stats.rentCollected += total;
     log('Collected ' + fmt(total) + ' in rent', true);
+    saveLocal();
   }
   return total;
 }
 
+// ---- savings account ---------------------------------------------------
+export function deposit(amount) {
+  if (!(amount > 0)) return { ok: false, msg: 'Enter an amount.' };
+  amount = Math.min(amount, state.cash);
+  if (!(amount > 0)) return { ok: false, msg: 'No cash to deposit.' };
+  accrueInterest();
+  state.cash -= amount;
+  state.savings.balance += amount;
+  log('Deposited ' + fmt(amount) + ' into savings', true);
+  saveLocal();
+  return { ok: true, msg: 'Deposited ' + fmt(amount) };
+}
+
+export function withdraw(amount) {
+  accrueInterest();
+  if (!(amount > 0)) return { ok: false, msg: 'Enter an amount.' };
+  amount = Math.min(amount, state.savings.balance);
+  if (!(amount > 0)) return { ok: false, msg: 'Nothing to withdraw.' };
+  state.savings.balance -= amount;
+  state.cash += amount;
+  log('Withdrew ' + fmt(amount) + ' from savings', true);
+  saveLocal();
+  return { ok: true, msg: 'Withdrew ' + fmt(amount) };
+}
+
+export const savingsRate = () => Math.max(0.25, rateNow() - 0.6);
+
+function accrueInterest() {
+  const now = Date.now();
+  const minutes = Math.min(MAX_OFFLINE_MIN, (now - (state.savings.last || now)) / 60000);
+  state.savings.last = now;
+  if (state.savings.balance <= 0 || minutes <= 0) return 0;
+  const gain = state.savings.balance * (savingsRate() / 100) * (minutes / 52);
+  state.savings.balance += gain;
+  state.stats.interest += gain;
+  return gain;
+}
+
+// ---- angel -------------------------------------------------------------
 export function investStartup(su, amount) {
   if (!(amount > 0)) return { ok: false, msg: 'Enter an amount.' };
   if (amount > state.cash) return { ok: false, msg: 'Not enough cash.' };
@@ -221,6 +349,7 @@ export function investStartup(su, amount) {
     matureTick: nowTick() + su.maturity, resolved: false, payout: 0,
   };
   log('Backed ' + su.name + ' with ' + fmt(amount), true);
+  saveLocal();
   return { ok: true, msg: 'Invested ' + fmt(amount) + ' in ' + su.name };
 }
 
@@ -236,23 +365,36 @@ function resolveStartups() {
     state.stats.realized += payout - s.amount;
     log(s.name + (mult === 0 ? ' shut down. Total loss of ' + fmt(s.amount)
         : ' exited at ' + mult.toFixed(2) + 'x -> ' + fmt(payout)), mult >= 1);
+    saveLocal();
   }
 }
 
-// Dividends are paid out of the annual yield, prorated per real minute.
-function payDividends() {
+// ---- income ------------------------------------------------------------
+// Dividends, bond coupons and savings interest all pay per real minute, where
+// one minute stands in for a simulated week. Time away is capped so coming back
+// after a week does not hand you a fortune.
+function payIncome() {
   const now = Date.now();
-  const minutes = (now - (state.lastDividend || now)) / 60000;
-  if (minutes < 1) return;
+  const minutes = Math.min(MAX_OFFLINE_MIN, (now - (state.lastDividend || now)) / 60000);
+  if (minutes < 1) { accrueInterest(); return; }
   state.lastDividend = now;
-  let total = 0;
+
+  let divs = 0;
   for (const id in state.holdings) {
     const a = ASSETS.get(id);
     if (!a || !a.div) continue;
-    // 1 real minute == 1 simulated week
-    total += state.holdings[id].shares * priceNow(a) * (a.div / 100) * (minutes / 52);
+    divs += state.holdings[id].shares * priceNow(a) * (a.div / 100) * (minutes / 52);
   }
-  if (total > 0.01) { state.cash += total; state.stats.dividends += total; }
+  let coupons = 0;
+  for (const id in state.bonds) {
+    const a = ASSETS.get(id);
+    if (!a) continue;
+    coupons += state.bonds[id].units * a.par * (a.coupon / 100) * (minutes / 52);
+  }
+  accrueInterest();
+
+  if (divs > 0.01) { state.cash += divs; state.stats.dividends += divs; }
+  if (coupons > 0.01) { state.cash += coupons; state.stats.coupons += coupons; }
 }
 
 // ---- transfers ---------------------------------------------------------
@@ -265,23 +407,25 @@ export async function transferCash(username, amount) {
   await Net.sendTransfer(uid, { type: 'cash', amount });
   state.cash -= amount;
   log('Sent ' + fmt(amount) + ' to ' + username, true);
+  saveLocal();
   return { ok: true, msg: 'Sent ' + fmt(amount) + ' to ' + username };
 }
 
 export async function transferShares(username, assetId, units) {
   if (!Net.Net.online) return { ok: false, msg: 'Transfers need an online server.' };
   const a = ASSETS.get(assetId);
-  const book = a && a.kind === 'alt' ? state.alts : state.holdings;
-  const key = a && a.kind === 'alt' ? 'units' : 'shares';
-  const pos = book[assetId];
+  const { book, key } = bookOf(a);
+  const pos = book && book[assetId];
   if (!a || !pos || !(units > 0) || units > pos[key] + 1e-9) return { ok: false, msg: 'You do not own that many.' };
   const uid = await Net.findUid(username);
   if (!uid) return { ok: false, msg: 'No player named "' + username + '".' };
+  if (uid === Net.Net.uid) return { ok: false, msg: 'You cannot send to yourself.' };
   const basis = pos.cost * (units / pos[key]);
   pos.cost -= basis; pos[key] -= units;
   if (pos[key] <= 1e-9) delete book[assetId];
   await Net.sendTransfer(uid, { type: 'asset', assetId, units, cost: basis });
   log('Sent ' + fmtUnits(units) + ' ' + a.ticker + ' to ' + username, true);
+  saveLocal();
   return { ok: true, msg: 'Sent ' + fmtUnits(units) + ' ' + a.ticker + ' to ' + username };
 }
 
@@ -293,9 +437,8 @@ export function receiveInbox(items) {
       log('Received ' + fmt(it.amount) + ' from ' + (it.fromName || 'a player'), true);
     } else if (it.type === 'asset') {
       const a = ASSETS.get(it.assetId);
-      if (a) {
-        const book = a.kind === 'alt' ? state.alts : state.holdings;
-        const key = a.kind === 'alt' ? 'units' : 'shares';
+      const { book, key } = bookOf(a);
+      if (a && book && it.units > 0) {
         const pos = book[it.assetId] || { [key]: 0, cost: 0 };
         pos[key] += it.units; pos.cost += it.cost || 0;
         book[it.assetId] = pos;
@@ -304,6 +447,7 @@ export function receiveInbox(items) {
     }
     claimed.push(it.key);
   }
+  saveLocal();
   return claimed;
 }
 
@@ -313,7 +457,6 @@ export function onTick(cb) { onTickCb = cb; }
 
 let lastSave = 0, lastCloud = 0, lastSample = 0;
 
-// One net-worth sample every 15s, keeping the last ~2 hours for the chart.
 function sampleNetWorth() {
   const now = Date.now();
   if (now - lastSample < 15000) return;
@@ -321,10 +464,16 @@ function sampleNetWorth() {
   state.nwHistory.push([Math.round(now / 1000), Math.round(state.netWorth)]);
   if (state.nwHistory.length > 480) state.nwHistory.splice(0, state.nwHistory.length - 480);
 }
+
+export function saveNow() {
+  saveLocal();
+  if (Net.Net.online) Net.savePlayer(state).catch(() => {});
+}
+
 export function startLoop() {
   const step = () => {
     resolveStartups();
-    payDividends();
+    payIncome();
     netWorth();
     sampleNetWorth();
     onTickCb();
@@ -337,8 +486,14 @@ export function startLoop() {
   };
   step();
   setInterval(step, 1000);
-  // Realtime price repaint runs at the tick rate.
   setInterval(() => onTickCb(), TICK_MS / 3);
+
+  // Never lose progress on a refresh, a closed tab, or a backgrounded phone.
+  window.addEventListener('beforeunload', saveNow);
+  window.addEventListener('pagehide', saveNow);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') saveNow();
+  });
 }
 
 // ---- formatting --------------------------------------------------------

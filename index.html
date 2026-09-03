@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Ledger City — Multiplayer Investing Sim</title>
-<link rel="stylesheet" href="style.css?v=1.10">
+<link rel="stylesheet" href="style.css?v=1.20">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📈</text></svg>">
 <script src="firebase-config.js"></script>
 </head>
@@ -14,7 +14,7 @@
 <div id="setup" class="setup" hidden>
   <div class="setup-card">
     <h1>Ledger City</h1>
-    <div class="ver-line">version <b>v1.10</b> &middot; <button id="cl-open" class="linkish inline">what's new</button></div>
+    <div class="ver-line">version <b>v1.20</b> &middot; <button id="cl-open" class="linkish inline">what's new</button></div>
     <p class="tag">A multiplayer market simulation. 624 real listed companies, 10 index funds,
        260 properties, crypto, commodities and angel deals — all on one shared clock.</p>
     <p class="disclaimer">Ticker symbols and company names are real; <b>every price in this game is
@@ -32,6 +32,9 @@
         It is stored in this browser only.</p>
       <textarea id="cfg-json" rows="9" spellcheck="false" placeholder='{ "apiKey": "...", "authDomain": "...", "databaseURL": "https://xxx.firebaseio.com", "projectId": "..." }'></textarea>
       <button id="cfg-save" class="mini">Save config</button>
+      <button id="cfg-link" class="mini" hidden>Copy join link</button>
+      <p class="hint" id="cfg-linkhint" hidden>Anyone who opens that link joins your world without
+        needing a Firebase project of their own.</p>
     </div>
   </div>
 </div>
@@ -45,7 +48,8 @@
     <div class="stat"><span>Rent due</span><b id="hdr-rent">$0</b></div>
     <div class="stat"><span>LC Index</span><b id="hdr-index">0</b> <i id="hdr-index-ch" class="delta"></i></div>
     <div class="spacer"></div>
-    <div class="who"><b id="hdr-name"></b><span id="status" class="pill">offline</span></div>
+    <div class="who"><span id="hdr-online" class="pill" hidden></span>
+      <b id="hdr-name"></b><span id="status" class="pill">offline</span></div>
   </header>
 
   <div class="ticker"><span id="ticker-text"></span></div>
@@ -55,6 +59,7 @@
     <button class="tab" data-tab="stocks">Stocks</button>
     <button class="tab" data-tab="property">Real Estate</button>
     <button class="tab" data-tab="alts">Alternatives</button>
+    <button class="tab" data-tab="bank">Bank &amp; Bonds</button>
     <button class="tab" data-tab="angel">Angel</button>
     <button class="tab" data-tab="social">Players</button>
   </nav>
@@ -88,7 +93,7 @@
       </div>
       <div class="grid2">
         <div class="card">
-          <h2>Property portfolio</h2>
+          <h2>Property portfolio <button id="p-collect2" class="mini">Collect rent</button></h2>
           <div id="myprops"></div>
         </div>
         <div class="card">
@@ -148,6 +153,50 @@
           <div class="c num">Price</div><div class="c num">Change</div><div class="c spark">Trend</div>
           <div class="c num">Owned</div></div>
         <div id="alt-body"></div>
+      </div>
+      <div class="card">
+        <h2>Collectibles <small>sold 9% below the quoted value</small></h2>
+        <p class="hint">Art, watches, cards, wine and curiosities. They drift for a long time, ignore
+          the stock market almost entirely, and occasionally jump when a comparable sells at auction.</p>
+        <div class="row head arow"><div class="c sym">Lot</div><div class="c tag">Class</div>
+          <div class="c num">Value</div><div class="c num">Change</div><div class="c spark">Trend</div>
+          <div class="c num">Owned</div></div>
+        <div id="collect-body"></div>
+      </div>
+    </section>
+
+    <!-- bank -->
+    <section class="panel" id="panel-bank" hidden>
+      <div class="grid2">
+        <div class="card">
+          <h2>Savings account</h2>
+          <div class="bankrow"><span>Policy rate</span><b id="bank-rate">0%</b></div>
+          <div class="bankrow"><span>Your rate</span><b id="bank-myrate">0%</b></div>
+          <div class="bankrow"><span>Balance</span><b id="bank-balance">$0</b></div>
+          <div class="bankrow"><span>Earned so far</span><b id="bank-earned">$0</b></div>
+          <div class="form inline">
+            <input id="bank-amount" type="number" min="0" placeholder="Amount">
+            <button id="bank-deposit" class="primary mini">Deposit</button>
+            <button id="bank-withdraw" class="mini">Withdraw</button>
+          </div>
+          <p class="hint">Cash in savings is never at risk and pays interest every minute, but it
+            will not keep up with a rising market. The rate follows the central bank.</p>
+        </div>
+        <div class="card">
+          <h2>The rate cycle</h2>
+          <canvas id="rate-chart" height="150"></canvas>
+          <p class="hint">Bond prices move against this line. The longer a bond&rsquo;s duration, the
+            harder it swings when the rate moves.</p>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Bonds</h2>
+        <p class="hint">Each bond pays its coupon every minute and can be sold at any time for
+          whatever it is worth once rates have moved.</p>
+        <div class="row head brow2"><div class="c sym">Bond</div><div class="c num">Coupon</div>
+          <div class="c num">Yield</div><div class="c num">Duration</div><div class="c num">Price</div>
+          <div class="c num">Change</div><div class="c num">Owned</div></div>
+        <div id="bond-body"></div>
       </div>
     </section>
 
@@ -224,19 +273,47 @@
   </div>
 </div>
 
-<button id="version" title="Update log">v1.10</button>
+<button id="report-open" title="Report a bug">Report a bug</button>
+<button id="version" title="Update log">v1.20</button>
+
+<!-- ---------------- bug report ---------------- -->
+<div id="report" hidden>
+  <div class="sheet">
+    <button id="report-close" class="x">&times;</button>
+    <h2>Report a bug</h2>
+    <p class="hint">Reports are read before every update, and anything fixed shows up in the
+      update log. Say what you did, what happened, and what you expected instead.</p>
+    <div class="form">
+      <select id="report-kind">
+        <option value="bug">Something is broken</option>
+        <option value="balance">Something feels unfair or badly balanced</option>
+        <option value="idea">An idea for a feature</option>
+        <option value="other">Something else</option>
+      </select>
+      <input id="report-title" maxlength="90" placeholder="One line summary">
+      <textarea id="report-body" rows="6" maxlength="1500" placeholder="What happened? What did you expect?"></textarea>
+      <label class="check"><input type="checkbox" id="report-attach" checked>
+        Attach my version, browser and portfolio summary</label>
+      <div class="trade">
+        <button id="report-send" class="primary">Send report</button>
+        <a id="report-github" class="btnlink" target="_blank" rel="noopener">Open as a GitHub issue</a>
+      </div>
+      <div id="report-status" class="status"></div>
+    </div>
+  </div>
+</div>
 
 <!-- ---------------- update log ---------------- -->
 <div id="changelog" hidden>
   <div class="sheet">
     <button id="cl-close" class="x">&times;</button>
     <h1 class="cl-h">Ledger City</h1>
-    <div class="ver-line">update log &middot; <b id="cl-version">v1.10</b></div>
+    <div class="ver-line">update log &middot; <b id="cl-version">v1.20</b></div>
     <div id="cl-next"></div>
     <div id="cl-body"></div>
   </div>
 </div>
 <div id="toast" hidden></div>
-<script type="module" src="js/main.js?v=1.10"></script>
+<script type="module" src="js/main.js?v=1.20"></script>
 </body>
 </html>

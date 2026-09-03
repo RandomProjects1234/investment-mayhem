@@ -1,9 +1,30 @@
 // Release history and roadmap. Rendered in-game (click the version badge) and
 // mirrored in CHANGELOG.md / ROADMAP.md so the repo tells the same story.
 
-export const VERSION = 'v1.10';
+export const VERSION = 'v1.20';
 
 export const RELEASES = [
+  {
+    version: 'v1.20',
+    date: '2026-09-03',
+    title: 'Bonds, savings, collectibles and bug reports',
+    items: [
+      ['new', 'Bonds. Eight of them, from a 2 year treasury to high yield corporate debt. Prices move against a central bank policy rate, scaled by duration, and each one pays its coupon every minute.'],
+      ['new', 'A savings account. Cash parked there is never at risk and earns interest that follows the policy rate. Safe, and deliberately slower than the market.'],
+      ['new', 'Collectibles. Twenty-four lots across art, watches, cards, wine and curiosities. They barely notice the stock market and sell 9% below the quoted value, because illiquidity should cost you something.'],
+      ['new', 'Twelve more cryptocurrencies and ten more commodities.'],
+      ['new', 'Report a bug from inside the game. Reports go to the server for the developer to read, and every report also has a one-click GitHub issue link. Fixes appear in this log.'],
+      ['new', 'Live player count in the header, backed by real presence, and a join link that lets a host share their world without anyone else touching Firebase.'],
+      ['fix', 'Progress is now saved after every trade, when the tab is hidden, and when it closes, instead of only every five seconds.'],
+      ['fix', 'A cloud save can no longer overwrite newer local progress on refresh. Whichever is newer wins.'],
+      ['fix', 'Income earned while you were away is capped at four hours. Coming back after a week no longer pays out a fortune in dividends, rent and interest.'],
+      ['fix', 'Positions in an asset removed by an update are refunded at cost instead of silently vanishing. Crypto tickers changed in this release, so old holdings are paid back.'],
+      ['fix', 'The watchlist, savings, bonds and collectibles are all written to the cloud save. Previously the watchlist was dropped.'],
+      ['fix', 'Every module import carries the version, so a release can no longer leave a browser running a half-updated mix of cached files. This was breaking real deploys.'],
+      ['fix', 'Buying a property from its detail window now updates the property table behind it, and rent can be collected straight from the portfolio.'],
+      ['fix', 'Fractional orders are rejected for assets that do not support them, instead of quietly creating a third of a share.'],
+    ],
+  },
   {
     version: 'v1.10',
     date: '2026-09-03',
@@ -47,7 +68,7 @@ export const RELEASES = [
 
 // What the next update is aiming at. Ordered by what would change the game most.
 export const NEXT = {
-  version: 'v1.2',
+  version: 'v1.3',
   title: 'Orders and leverage',
   items: [
     ['Limit and stop orders',
@@ -55,19 +76,19 @@ export const NEXT = {
     ['Short selling',
      'Borrow shares, sell them, buy them back. Needs a borrow fee and a forced buy-in when a position runs away from you.'],
     ['Margin and loans',
-     'Borrow against your portfolio at an interest rate, with a maintenance requirement and a real margin call. Leverage is the fastest way to make the leaderboard interesting.'],
+     'Borrow against your portfolio at an interest rate tied to the policy rate that now exists, with a maintenance requirement and a real margin call.'],
     ['An earnings calendar',
      'Company shocks currently arrive unannounced. Scheduling them per company and showing the date turns news from weather into something you can trade ahead of.'],
+    ['Everything reported since v1.20',
+     'Bug reports are read before every release. Whatever comes in through the report button gets triaged here and fixed items are listed in this log.'],
     ['Portfolio analytics',
      'Best and worst trade, per-sector exposure, return against the index rather than against zero.'],
-    ['Weekly seasons',
-     'The leaderboard resets on a schedule and past seasons are archived, so a player who joins on day nine still has something to win.'],
   ],
   later: [
     ['Server-authoritative trading',
      'Move buy and sell into a Cloud Function so the leaderboard cannot be edited from the browser console. The rest of the architecture does not have to change.'],
+    ['Weekly seasons', 'The leaderboard resets on a schedule and past seasons are archived, so a player who joins late still has something to win.'],
     ['Property depth', 'Mortgages, renovations that raise rent, and tenants who leave.'],
-    ['Bonds and a rate cycle', 'A policy rate that moves, pays cash, and pushes the sectors around the way real rates do.'],
     ['Options', 'Simple calls and puts on the larger names, priced off the same curve.'],
     ['Mobile layout', 'The tables work on a phone, but they were designed for a wide screen.'],
   ],

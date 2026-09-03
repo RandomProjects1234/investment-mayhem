@@ -1,23 +1,24 @@
 // All DOM rendering. Rows are built once per filter change and only their
 // number cells are rewritten on each tick, so 640 stocks stay smooth.
-import * as G from './game.js';
+import * as G from './game.js?v=1.20';
 import { priceNow, priceAt, changePct, history, nowTick, marketIndex,
-         recentEvents, flowOf, flowImpact } from './market.js';
-import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js';
-import * as Net from './net.js';
-import { RELEASES, NEXT, VERSION } from './changelog.js';
+         recentEvents, flowOf, flowImpact, policyRate, bondYield } from './market.js?v=1.20';
+import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=1.20';
+import * as Net from './net.js?v=1.20';
+import { RELEASES, NEXT, VERSION } from './changelog.js?v=1.20';
 
 const $ = s => document.querySelector(s);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
 const cls = n => n >= 0 ? 'up' : 'down';
 
-export const UI = { tab: 'portfolio', toast, openAsset, refresh, boot, setLeaderboard, setFeed, setChat, setStatus, initChangelog };
+export const UI = { tab: 'portfolio', toast, openAsset, refresh, boot, setLeaderboard, setFeed, setChat, setStatus, initChangelog, setOnline };
 
 let leaderboard = [], feed = [], chat = [];
 
 // ---------------- update log ----------------
 // Rendered from js/changelog.js, the same source CHANGELOG.md is built from.
 function initChangelog() {
+  buildReport();
   $('#version').textContent = VERSION;
   $('#cl-version').textContent = VERSION;
   const open = () => { renderChangelog(); $('#changelog').hidden = false; };
@@ -80,14 +81,23 @@ function boot() {
   $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
   buildStocksControls();
   buildPropControls();
+  buildBank();
   buildTransfer();
+  const rent2 = $('#p-collect2');
+  if (rent2) rent2.addEventListener('click', e => {
+    e.stopPropagation();
+    const got = G.collectRent();
+    toast(got > 0 ? 'Collected ' + G.fmt(got) + ' in rent' : 'No rent has accrued yet.');
+    lastPortfolioBuild = 0;
+  });
   buildTab();
 }
 
 function buildTab() {
   if (UI.tab === 'stocks') renderStockRows();
   if (UI.tab === 'property') renderPropRows();
-  if (UI.tab === 'alts') renderAltRows();
+  if (UI.tab === 'alts') { renderAltRows(); renderCollectRows(); }
+  if (UI.tab === 'bank') renderBank();
   if (UI.tab === 'angel') renderAngel();
   if (UI.tab === 'social') { renderLeaderboard(); renderFeed(); renderChat(); }
   refresh();
@@ -109,7 +119,8 @@ function refresh() {
   if (UI.tab === 'portfolio') renderPortfolio();
   else if (UI.tab === 'stocks') { tickStockRows(); renderSectorStrip(); }
   else if (UI.tab === 'property') tickPropRows();
-  else if (UI.tab === 'alts') tickAltRows();
+  else if (UI.tab === 'alts') { tickAltRows(); tickCollectRows(); }
+  else if (UI.tab === 'bank') tickBank();
   else if (UI.tab === 'angel') tickAngel();
   if (modalAsset) tickModal();
   renderNews();
@@ -125,8 +136,10 @@ let lastPortfolioBuild = 0;
 function renderPortfolio() {
   const v = G.positionsValue();
   $('#alloc').innerHTML = '';
-  const parts = [['Cash', G.state.cash, '#6b7a8f'], ['Stocks', v.stocks, '#5b8cff'],
-    ['Property', v.property, '#39d38a'], ['Alternatives', v.alt, '#ffb03a'], ['Angel', v.angel, '#f2618c']];
+  const parts = [['Cash', G.state.cash, '#6b7a8f'], ['Savings', v.savings, '#4fc3c3'],
+    ['Stocks', v.stocks, '#5b8cff'], ['Bonds', v.bonds, '#9b7bff'],
+    ['Property', v.property, '#39d38a'], ['Alternatives', v.alt, '#ffb03a'],
+    ['Collectibles', v.collect, '#d98cff'], ['Angel', v.angel, '#f2618c']];
   const total = Math.max(1, G.state.netWorth);
   const bar = el('div', 'allocbar');
   for (const [name, val, color] of parts) {
@@ -162,10 +175,14 @@ function renderPortfolio() {
     const pos = G.state.holdings[id], px = priceNow(a), val = pos.shares * px;
     rows.push({ a, label: a.ticker, sub: a.name, qty: pos.shares, px, val, pl: val - pos.cost, cost: pos.cost });
   }
-  for (const id in G.state.alts) {
-    const a = G.ASSETS.get(id); if (!a) continue;
-    const pos = G.state.alts[id], px = priceNow(a), val = pos.units * px;
-    rows.push({ a, label: a.ticker, sub: a.name, qty: pos.units, px, val, pl: val - pos.cost, cost: pos.cost });
+  for (const bookName of ['alts', 'bonds', 'collect']) {
+    for (const id in G.state[bookName]) {
+      const a = G.ASSETS.get(id); if (!a) continue;
+      const pos = G.state[bookName][id];
+      const px = priceNow(a) * (1 - G.spreadOf(a));
+      const val = pos.units * px;
+      rows.push({ a, label: a.ticker, sub: a.name, qty: pos.units, px, val, pl: val - pos.cost, cost: pos.cost });
+    }
   }
   rows.sort((x, y) => y.val - x.val);
   if (!rows.length) hb.appendChild(el('div', 'empty', 'No positions yet. Head to the Stocks tab and buy something.'));
@@ -374,6 +391,165 @@ function renderAltRows() {
   tickAltRows();
 }
 const tickAltRows = () => altRows.forEach(r => tickAssetRow(r, G.state.alts));
+
+// ---------------- collectibles ----------------
+let collectRows = [];
+function renderCollectRows() {
+  const body = $('#collect-body'); body.innerHTML = '';
+  collectRows = G.COLLECTIBLES.map(a => makeAssetRow(a, body, true));
+  tickCollectRows();
+}
+function tickCollectRows() {
+  for (const r of collectRows) {
+    const p = priceNow(r.a);
+    r.px.textContent = G.fmt(p);
+    const c = changePct(r.a, 900);
+    r.ch.textContent = G.fmtPct(c);
+    r.ch.className = 'c num ch ' + cls(c);
+    const pos = G.state.collect[r.a.id];
+    r.own.textContent = pos ? G.fmtUnits(pos.units) : '';
+    const t = nowTick();
+    if (r.row._canvas && t - r.lastSpark >= 4) {
+      r.lastSpark = t;
+      drawSpark(r.row._canvas, history(r.a, 40, 40), c >= 0);
+    }
+  }
+}
+
+// ---------------- bank and bonds ----------------
+let bondRows = [];
+function buildBank() {
+  $('#bank-deposit').addEventListener('click', () => {
+    toast(G.deposit(Number($('#bank-amount').value)).msg); tickBank();
+  });
+  $('#bank-withdraw').addEventListener('click', () => {
+    toast(G.withdraw(Number($('#bank-amount').value)).msg); tickBank();
+  });
+}
+
+function renderBank() {
+  const body = $('#bond-body'); body.innerHTML = '';
+  bondRows = G.BONDS.map(a => {
+    const row = el('div', 'row brow2');
+    row.innerHTML =
+      '<div class="c sym"><b>' + a.ticker + '</b><span>' + a.name + '</span></div>' +
+      '<div class="c num">' + a.coupon.toFixed(2) + '%</div>' +
+      '<div class="c num yld"></div>' +
+      '<div class="c num">' + a.duration.toFixed(1) + 'y</div>' +
+      '<div class="c num px"></div>' +
+      '<div class="c num ch"></div>' +
+      '<div class="c num own"></div>';
+    row.addEventListener('click', () => openAsset(a.id));
+    body.appendChild(row);
+    return { a, row, px: row.querySelector('.px'), ch: row.querySelector('.ch'),
+             yld: row.querySelector('.yld'), own: row.querySelector('.own') };
+  });
+  tickBank();
+}
+
+function tickBank() {
+  const t = nowTick();
+  $('#bank-rate').textContent = policyRate(t).toFixed(2) + '%';
+  $('#bank-myrate').textContent = G.savingsRate().toFixed(2) + '%';
+  $('#bank-balance').textContent = G.fmt(G.state.savings.balance);
+  $('#bank-earned').textContent = G.fmt(G.state.stats.interest || 0);
+  for (const r of bondRows) {
+    const p = priceNow(r.a);
+    r.px.textContent = G.fmt(p);
+    r.yld.textContent = bondYield(r.a, t).toFixed(2) + '%';
+    const c = changePct(r.a, 900);
+    r.ch.textContent = G.fmtPct(c);
+    r.ch.className = 'c num ch ' + cls(c);
+    const pos = G.state.bonds[r.a.id];
+    r.own.textContent = pos ? G.fmtUnits(pos.units) : '';
+  }
+  const cv = $('#rate-chart');
+  if (cv && UI.tab === 'bank') {
+    const pts = [];
+    for (let i = 119; i >= 0; i--) pts.push(policyRate(t - i * 20));
+    drawChart(cv, pts);
+  }
+}
+
+// ---------------- presence ----------------
+function setOnline(names) {
+  const pill = $('#hdr-online');
+  if (!names || !names.length) { pill.hidden = true; return; }
+  pill.hidden = false;
+  pill.className = 'pill ok';
+  pill.textContent = names.length + (names.length === 1 ? ' player online' : ' players online');
+  pill.title = names.join(', ');
+}
+
+// ---------------- bug reports ----------------
+const REPO = 'https://github.com/RandomProjects1234/ledger-city';
+
+function buildReport() {
+  const box = $('#report');
+  const open = () => { $('#report-status').textContent = ''; box.hidden = false; syncGithubLink(); };
+  $('#report-open').addEventListener('click', open);
+  $('#report-close').addEventListener('click', () => { box.hidden = true; });
+  box.addEventListener('click', e => { if (e.target.id === 'report') box.hidden = true; });
+  ['#report-title', '#report-body', '#report-kind', '#report-attach']
+    .forEach(sel => $(sel).addEventListener('input', syncGithubLink));
+  $('#report-send').addEventListener('click', sendReport);
+}
+
+function reportContext() {
+  const v = G.positionsValue();
+  return [
+    'version: ' + VERSION,
+    'mode: ' + (Net.Net.online ? 'online' : 'solo'),
+    'tab: ' + UI.tab,
+    'net worth: ' + G.fmt(G.state.netWorth) + ' (cash ' + G.fmt(G.state.cash) + ')',
+    'positions: ' + Object.keys(G.state.holdings).length + ' equity, ' +
+      Object.keys(G.state.alts).length + ' alt, ' + Object.keys(G.state.bonds).length + ' bond, ' +
+      Object.keys(G.state.collect).length + ' collectible, ' +
+      Object.keys(G.state.props).length + ' property',
+    'screen: ' + window.innerWidth + 'x' + window.innerHeight,
+    'agent: ' + navigator.userAgent,
+  ].join('\n');
+}
+
+function syncGithubLink() {
+  const title = $('#report-title').value.trim() || 'Bug report';
+  const kind = $('#report-kind').value;
+  let body = $('#report-body').value.trim();
+  if ($('#report-attach').checked) body += '\n\n---\n```\n' + reportContext() + '\n```';
+  $('#report-github').href = REPO + '/issues/new?labels=' + encodeURIComponent(kind) +
+    '&title=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(body);
+}
+
+async function sendReport() {
+  const title = $('#report-title').value.trim();
+  const body = $('#report-body').value.trim();
+  const status = $('#report-status');
+  if (title.length < 4) { status.textContent = 'Give it a one line summary first.'; return; }
+
+  const report = {
+    kind: $('#report-kind').value, title: title.slice(0, 90), body: body.slice(0, 1500),
+    context: $('#report-attach').checked ? reportContext() : '',
+  };
+  // Keep a local copy either way, so nothing is lost if the send fails.
+  try {
+    const mine = JSON.parse(localStorage.getItem('is_reports') || '[]');
+    mine.unshift({ ...report, ts: Date.now(), sent: Net.Net.online });
+    localStorage.setItem('is_reports', JSON.stringify(mine.slice(0, 30)));
+  } catch (e) { /* ignore */ }
+
+  if (!Net.Net.online) {
+    status.textContent = 'Saved on this device. Solo mode has nowhere to send it, so use ' +
+      'the GitHub link to file it where the developer will see it.';
+    return;
+  }
+  try {
+    await Net.submitReport(report);
+    status.textContent = 'Sent. Thank you - reports are read before every update.';
+    $('#report-title').value = ''; $('#report-body').value = '';
+  } catch (e) {
+    status.textContent = 'Could not send it (' + e.message + '). The GitHub link still works.';
+  }
+}
 
 // ---------------- property ----------------
 const propState = { region: 'all', type: 'all', limit: 40, mineOnly: false };
@@ -597,8 +773,14 @@ function openAsset(id) {
       $('#m-qty').value = tradeMode === 'cash' ? Math.floor(q * priceNow(a)) : String(q);
     };
   } else {
-    $('#m-pbuy').onclick = () => { toast(G.buyProperty(a.id).msg); refresh(); tickModal(); };
-    $('#m-psell').onclick = () => { toast(G.sellProperty(a.id).msg); refresh(); tickModal(); };
+    $('#m-pbuy').onclick = () => {
+      toast(G.buyProperty(a.id).msg); refresh(); tickModal();
+      if (UI.tab === 'property') renderPropRows();
+    };
+    $('#m-psell').onclick = () => {
+      toast(G.sellProperty(a.id).msg); refresh(); tickModal();
+      if (UI.tab === 'property') renderPropRows();
+    };
   }
   tickModal();
 }
@@ -607,14 +789,25 @@ function closeModal() { $('#modal').hidden = true; modalAsset = null; }
 function tickModal() {
   const a = modalAsset; if (!a) return;
   const px = priceNow(a);
-  $('#m-price').textContent = a.kind === 'property' ? G.fmt(px) : G.fmtPx(px);
+  $('#m-price').textContent = (a.kind === 'property' || a.kind === 'collect' || px >= 1000)
+    ? G.fmt(px) : G.fmtPx(px);
   const c = changePct(a, a.kind === 'property' ? 900 : 400);
   $('#m-change').textContent = G.fmtPct(c);
   $('#m-change').className = 'm-change ' + cls(c);
   drawChart($('#m-chart'), history(a, 160, a.kind === 'property' ? 12 : 4));
 
   const facts = [];
-  if (a.kind === 'fund') {
+  if (a.kind === 'bond') {
+    facts.push(['Coupon', a.coupon.toFixed(2) + '% / yr'],
+      ['Current yield', bondYield(a, nowTick()).toFixed(2) + '%'],
+      ['Duration', a.duration.toFixed(1) + ' years'],
+      ['Credit spread', a.credit ? a.credit.toFixed(2) + '%' : 'none (government)'],
+      ['Par value', G.fmt(a.par)]);
+  } else if (a.kind === 'collect') {
+    facts.push(['Class', a.className], ['Quoted value', G.fmt(px)],
+      ['You would get', G.fmt(px * (1 - G.spreadOf(a)))],
+      ['Spread', (G.spreadOf(a) * 100).toFixed(0) + '%']);
+  } else if (a.kind === 'fund') {
     facts.push(['Type', 'Index fund'], ['Holdings', a.holdings + ' companies'],
       ['Distribution', a.div.toFixed(2) + '% / yr'],
       ['Top holding', a.members[0].asset.ticker + ' (' + (a.members[0].w * 100).toFixed(1) + '%)']);

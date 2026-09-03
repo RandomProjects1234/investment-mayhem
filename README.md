@@ -1,11 +1,12 @@
 # Ledger City — a multiplayer investing sim on GitHub Pages
 
-**Play it: <https://randomprojects1234.github.io/ledger-city/>** &nbsp;·&nbsp; version **v1.10** &nbsp;·&nbsp; [changelog](CHANGELOG.md) &nbsp;·&nbsp; [roadmap](ROADMAP.md)
+**Play it: <https://randomprojects1234.github.io/ledger-city/>** &nbsp;·&nbsp; version **v1.20** &nbsp;·&nbsp; [changelog](CHANGELOG.md) &nbsp;·&nbsp; [roadmap](ROADMAP.md)
 
 Pure static frontend (HTML + CSS + ES modules, no build step) with Firebase
 Realtime Database as the only backend. **624 real listed companies** across 11
-sectors, 10 index funds priced from their own holdings, 260 properties, 12
-cryptocurrencies, 8 commodities, and a rotating slate of angel deals.
+sectors, 10 index funds priced from their own holdings, 260 properties, 8 bonds
+driven by a policy rate, a savings account, 24 cryptocurrencies, 18 commodities,
+24 collectible lots, and a rotating slate of angel deals.
 
 > **Simulated market.** Ticker symbols and company names are real, and each one
 > starts from a rough, rounded price and market cap taken from a 2025-era
@@ -56,6 +57,17 @@ Then open <http://localhost:3491>. (Windows: `Start Ledger City.bat` in the pare
 2. Settings → Pages → deploy from branch, `/` or `/docs`.
 3. Add your Pages domain under Firebase → Authentication → Settings → Authorized domains.
 
+## Multiplayer
+
+Two ways in:
+
+1. **Host with your own project** — follow the Firebase setup below and either paste your
+   config into `firebase-config.js` (everyone who opens the site joins your world) or into
+   the in-game *Server settings* box (only this browser).
+2. **Join a link** — a host presses *Copy join link* in Server settings and sends it. The
+   link carries the config in its `#join=` fragment, so a friend just opens it and presses
+   *Play online*. No Firebase account needed on their side.
+
 ## Firebase setup
 
 1. Create a project, then **Realtime Database** (not Firestore — the rules here are RTDB).
@@ -104,7 +116,23 @@ architecture does not change.
 - **Angel** — a new slate of 8 startups every ~10 minutes. Most return zero; the
   extreme-risk tier pays up to ~45x. Outcomes are a deterministic hash, fixed the
   moment the deal is generated, and revealed at maturity.
-- **Players** — live net-worth leaderboard, trade tape, chat, and cash/asset transfers by username.
+- **Bonds** — 2y to 30y treasuries plus muni, investment grade, high yield and EM debt.
+  Price moves against a simulated central bank policy rate, scaled by duration, so a
+  30-year bond is a leveraged bet on rates. Coupons pay every real minute.
+- **Savings** — cash parked at the bank earns the policy rate minus 0.6, never at risk.
+- **Collectibles** — 24 lots of art, watches, cards, wine and curiosities. Slow, almost
+  uncorrelated with equities, and sold 9% below the quoted value because they are illiquid.
+- **Players** — live net-worth leaderboard, presence (who is online now), trade tape, chat,
+  and cash/asset transfers by username.
+- **Bug reports** — the "Report a bug" button files a report to the server for the developer
+  to read, and offers a one-click prefilled GitHub issue. Fixes are listed in the update log.
+
+## Saving
+
+Progress is written to `localStorage` after every trade, when the tab is hidden, when it
+closes, and on a 5s timer; online it also syncs to `/players/{uid}` every 15 seconds. On
+load the newer of the two wins, so a refresh never rolls you back. Income earned while you
+were away is capped at four hours.
 
 ## Files
 
@@ -120,7 +148,22 @@ architecture does not change.
 | `js/net.js` | Firebase adapter + solo fallback |
 | `js/main.js` | login screen and wiring |
 | `js/changelog.js` | release history and roadmap, read by the in-game update log |
-| `tools/gen-docs.mjs` | regenerates CHANGELOG.md and ROADMAP.md from that file |
+| `tools/release.mjs` | regenerates the docs and stamps the version into index.html and every import |
 | `database.rules.json` | RTDB security rules |
+
+## Cutting a release
+
+1. Edit `js/changelog.js`: bump `VERSION`, add a `RELEASES` entry, update `NEXT`.
+2. `node tools/release.mjs` — rewrites CHANGELOG.md and ROADMAP.md and stamps the version
+   into `index.html` and onto every module import.
+3. Commit, tag, push.
+
+Step 2's import stamping is not cosmetic: browsers cache ES modules hard, and without it a
+deploy can leave a player running a mix of old and new files.
+
+## Reading bug reports
+
+Reports land in `/reports` in the Realtime Database (write-only for players, readable in the
+Firebase console). Players can also file them straight to GitHub issues from the same dialog.
 
 Debug hook: `window.IS` exposes `{ G, Net, UI }` in the console.

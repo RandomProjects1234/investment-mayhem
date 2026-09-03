@@ -1,8 +1,8 @@
 // Entry point: login screen, Firebase wiring, then hand off to the game loop.
-import * as G from './game.js';
-import * as Net from './net.js';
-import { UI } from './ui.js';
-import { setFlow } from './market.js';
+import * as G from './game.js?v=1.20';
+import * as Net from './net.js?v=1.20';
+import { UI } from './ui.js?v=1.20';
+import { setFlow } from './market.js?v=1.20';
 
 const $ = s => document.querySelector(s);
 
@@ -17,7 +17,26 @@ function showSetup() {
   $('#name').value = localStorage.getItem('is_name') || '';
   $('#btn-online').addEventListener('click', () => start(true));
   $('#btn-solo').addEventListener('click', () => start(false));
-  $('#cfg-toggle').addEventListener('click', () => { $('#cfg-box').hidden = !$('#cfg-box').hidden; });
+  $('#cfg-toggle').addEventListener('click', () => {
+    $('#cfg-box').hidden = !$('#cfg-box').hidden;
+    showJoinLink();
+  });
+  $('#cfg-link').addEventListener('click', async () => {
+    const c = Net.loadConfig();
+    if (!c) return;
+    const link = Net.makeJoinLink(c);
+    try {
+      await navigator.clipboard.writeText(link);
+      $('#setup-status').textContent = 'Join link copied. Anyone who opens it joins your world.';
+    } catch (e) {
+      $('#cfg-json').value = link;
+      $('#setup-status').textContent = 'Copy this link from the box above.';
+    }
+  });
+  if (Net.configFromLink()) {
+    $('#setup-status').textContent = 'You opened a join link - press Play online to join that world.';
+  }
+  showJoinLink();
   $('#cfg-save').addEventListener('click', () => {
     try {
       const raw = $('#cfg-json').value.trim()
@@ -28,10 +47,17 @@ function showSetup() {
       if (!obj.apiKey || !obj.databaseURL) throw new Error('Config needs apiKey and databaseURL.');
       Net.saveConfig(obj);
       $('#setup-status').textContent = 'Config saved. Now sign in to play online.';
+      showJoinLink();
     } catch (e) {
       $('#setup-status').textContent = 'Could not read that config: ' + e.message;
     }
   });
+}
+
+function showJoinLink() {
+  const has = !!Net.loadConfig();
+  $('#cfg-link').hidden = !has;
+  $('#cfg-linkhint').hidden = !has;
 }
 
 async function start(online) {
@@ -72,6 +98,8 @@ async function start(online) {
 }
 
 function wireOnline() {
+  Net.joinPresence(G.state.name || Net.Net.name);
+  Net.watchPresence(names => UI.setOnline(names));
   Net.watchFlow(flow => setFlow(flow));
   Net.watchLeaderboard(rows => UI.setLeaderboard(rows));
   Net.watchFeed(rows => UI.setFeed(rows));
@@ -80,7 +108,6 @@ function wireOnline() {
     const keys = G.receiveInbox(items);
     if (keys.length) { await Net.clearInbox(keys); G.saveLocal(); }
   });
-  window.addEventListener('beforeunload', () => { G.saveLocal(); Net.savePlayer(G.state).catch(() => {}); });
 }
 
 showSetup();

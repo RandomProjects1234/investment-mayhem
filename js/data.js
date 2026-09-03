@@ -6,8 +6,8 @@
 // to the real market. Properties, alt assets and startups are fictional and
 // generated procedurally from WORLD_SEED, so nothing needs to be stored server
 // side: every client rebuilds the identical universe in ~15ms.
-import { rngFrom, hash32, pick, rr, clamp } from './rng.js';
-import { SECTOR_ROWS, FUNDS } from './companies.js';
+import { rngFrom, hash32, pick, rr, clamp } from './rng.js?v=1.20';
+import { SECTOR_ROWS, FUNDS } from './companies.js?v=1.20';
 
 export const WORLD_SEED = 'ledger-city-v1';
 
@@ -155,6 +155,10 @@ export function generateAlts() {
     ['XRP','XRP', 0.58], ['DOGE','Dogecoin', 0.13], ['ADA','Cardano', 0.42],
     ['AVAX','Avalanche', 28], ['LINK','Chainlink', 13], ['DOT','Polkadot', 5.4],
     ['MATIC','Polygon', 0.52], ['LTC','Litecoin', 68], ['UNI','Uniswap', 7.2],
+    ['BNB','BNB', 570], ['TRX','TRON', 0.16], ['TON','Toncoin', 5.6],
+    ['ATOM','Cosmos', 6.4], ['ARB','Arbitrum', 0.72], ['OP','Optimism', 1.6],
+    ['APT','Aptos', 8.1], ['INJ','Injective', 21], ['NEAR','NEAR Protocol', 4.3],
+    ['FIL','Filecoin', 3.7], ['ICP','Internet Computer', 8.5], ['SHIB','Shiba Inu', 0.000017],
   ].map(([t, n, p]) => ({
     kind: 'alt', class: 'crypto', id: 'A:' + t, ticker: t, name: n, base: p,
     vol: rr(rand, 0.55, 1.35), beta: rr(rand, 0.6, 2.0), speed: rr(rand, 2.2, 4.5),
@@ -165,11 +169,69 @@ export function generateAlts() {
     ['WTI','Crude Oil (bbl)', 78.2, 0.34], ['NATGAS','Natural Gas (mmBtu)', 2.65, 0.48],
     ['COPPER','Copper (lb)', 4.35, 0.24], ['WHEAT','Wheat (bu)', 6.1, 0.30],
     ['URANIUM','Uranium (lb)', 91, 0.31], ['LITHIUM','Lithium (t)', 14200, 0.42],
+    ['PLAT','Platinum (oz)', 985, 0.22], ['PALL','Palladium (oz)', 1010, 0.38],
+    ['CORN','Corn (bu)', 4.2, 0.28], ['SOY','Soybeans (bu)', 10.4, 0.26],
+    ['COFFEE','Coffee (lb)', 2.35, 0.40], ['COCOA','Cocoa (t)', 7800, 0.52],
+    ['SUGAR','Sugar (lb)', 0.21, 0.30], ['COTTON','Cotton (lb)', 0.72, 0.27],
+    ['ALUM','Aluminium (t)', 2450, 0.23], ['NICKEL','Nickel (t)', 16800, 0.35],
   ].map(([t, n, p, v]) => ({
     kind: 'alt', class: 'commodity', id: 'A:' + t, ticker: t, name: n, base: p,
     vol: v, beta: rr(rand, 0.3, 0.9), speed: rr(rand, 0.8, 1.6), seed: hash32('alt:' + t) | 0,
   }));
   return [...crypto, ...comm];
+}
+
+// ---------------- Fixed income ----------------
+// Bond prices fall when the policy rate rises. Duration decides how hard, which
+// is the whole lesson: a 30-year bond is a leveraged bet on rates.
+export function generateBonds() {
+  const defs = [
+    ['UST2',  'Treasury Note 2 Year',   3.80, 1.9, 0.0],
+    ['UST5',  'Treasury Note 5 Year',   4.00, 4.5, 0.0],
+    ['UST10', 'Treasury Bond 10 Year',  4.20, 8.2, 0.0],
+    ['UST30', 'Treasury Bond 30 Year',  4.50, 17.5, 0.0],
+    ['MUNI',  'City Revenue Muni',      3.40, 6.0, 0.35],
+    ['IGCORP','Investment Grade Corp',  5.40, 6.8, 0.85],
+    ['HYCORP','High Yield Corp',        8.20, 4.2, 3.40],
+    ['EMDEBT','Emerging Market Debt',   7.10, 5.6, 2.60],
+  ];
+  return defs.map(([t, n, coupon, dur, credit]) => ({
+    kind: 'bond', id: 'B:' + t, ticker: t, name: n,
+    par: 1000, base: 1000, coupon, duration: dur, credit,
+    seed: hash32('bnd:' + t) | 0,
+  }));
+}
+
+// ---------------- Collectibles ----------------
+// Slow, illiquid and sold at a spread. They ignore the stock market almost
+// entirely, which makes them the one thing that holds up in a crash.
+export const COLLECT_SPREAD = 0.09;   // you sell 9% below the quoted value
+
+export function generateCollectibles() {
+  const rand = rngFrom(WORLD_SEED + ':collect');
+  const defs = [
+    ['Abstract Canvas, 1968', 'art', 420000], ['Bronze Study, 1931', 'art', 185000],
+    ['Colour Field Triptych', 'art', 96000], ['Street Art Panel', 'art', 42000],
+    ['Steel Chronograph, 1969', 'watch', 88000], ['Gold Dress Watch, 1952', 'watch', 34000],
+    ['Dive Watch, First Series', 'watch', 61000], ['Skeleton Tourbillon', 'watch', 210000],
+    ['Rookie Card, Basketball', 'card', 74000], ['Holo Monster Card, Sealed', 'card', 26000],
+    ['Vintage Baseball Set', 'card', 12500], ['First Print Trading Box', 'card', 6800],
+    ['Bordeaux Case, 1982', 'wine', 31000], ['Single Malt Cask, 1974', 'wine', 88000],
+    ['Champagne Vertical', 'wine', 14500], ['Barolo Library Lot', 'wine', 9200],
+    ['First Edition Comic', 'odd', 155000], ['Meteorite Slice', 'odd', 8400],
+    ['Roman Coin Hoard', 'odd', 47000], ['Arcade Cabinet, Boxed', 'odd', 5600],
+    ['Signed Tour Guitar', 'odd', 68000], ['Cinema Poster, 1977', 'odd', 21000],
+    ['Antique Sea Chart', 'odd', 15800], ['Studio Pottery Vase', 'odd', 4300],
+  ];
+  const CLASSES = { art: 'Art', watch: 'Watches', card: 'Cards', wine: 'Wine & spirits', odd: 'Curiosities' };
+  return defs.map(([name, cls, price]) => ({
+    kind: 'collect', class: cls, className: CLASSES[cls],
+    id: 'C:' + name.replace(/[^A-Za-z0-9]/g, '').slice(0, 18),
+    ticker: name.split(/[ ,]/)[0].toUpperCase().slice(0, 6),
+    name, base: price,
+    vol: rr(rand, 0.12, 0.38), speed: rr(rand, 0.6, 1.4),
+    seed: hash32('col:' + name) | 0,
+  }));
 }
 
 // Angel investing: a rotating slate of startups, deterministic per round.

@@ -203,4 +203,27 @@ main{padding:16px 20px 60px;max-width:1500px;margin:0 auto}
 .heat span{font-family:var(--mono);font-size:11px;opacity:.85}
 .heat.up{color:#bdf5d8} .heat.down{color:#ffc6cb}
 
+/* ---------- v1.20 additions ---------- */
+.brow2{grid-template-columns:minmax(180px,2.2fr) .8fr .8fr .8fr 1fr .9fr .8fr}
+@media(max-width:820px){.brow2{grid-template-columns:2fr 1fr 1fr}
+  .brow2 .c:nth-child(2),.brow2 .c:nth-child(4),.brow2 .c:nth-child(6){display:none}}
+.bankrow{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;
+  border-bottom:1px solid rgba(255,255,255,.05)}
+.bankrow span{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.bankrow b{font-family:var(--mono);font-size:15px}
+#rate-chart{width:100%;height:150px}
+h2 .mini{float:right;margin-top:-4px}
+.check{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim)}
+.check input{width:auto}
+.btnlink{display:inline-flex;align-items:center;padding:8px 14px;border:1px solid var(--line);
+  border-radius:8px;color:var(--txt);text-decoration:none;font-size:14px;background:#18202c}
+.btnlink:hover{border-color:#33465e;background:#1e2836}
+#report-open{position:fixed;right:74px;bottom:8px;z-index:70;font-size:11px;letter-spacing:.04em;
+  color:#5d6c80;background:rgba(10,15,23,.72);border:1px solid var(--line);border-radius:99px;
+  padding:3px 10px;backdrop-filter:blur(4px)}
+#report-open:hover{color:#ffcf6b;border-color:#4a3a17}
+#report{position:fixed;inset:0;background:rgba(3,6,11,.78);display:grid;place-items:center;z-index:95;padding:16px}
+#report textarea{font:inherit;resize:vertical}
+#report .status{color:#8ff0c0}
+
 [hidden]{display:none !important}

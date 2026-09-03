@@ -72,6 +72,32 @@
       }
     },
 
+    "presence": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name','ts'])",
+        "name": { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "ts":   { ".validate": "newData.isNumber() && newData.val() <= now + 60000" }
+      }
+    },
+
+    "reports": {
+      "comment": "Bug reports. Any signed-in player may file one; only the console (or an admin) reads them.",
+      ".read": false,
+      "$report": {
+        ".write": "auth != null && !data.exists() && newData.child('uid').val() === auth.uid",
+        ".validate": "newData.hasChildren(['kind','title','uid','ts'])",
+        "title":   { ".validate": "newData.isString() && newData.val().length <= 90" },
+        "body":    { ".validate": "newData.isString() && newData.val().length <= 1500" },
+        "context": { ".validate": "newData.isString() && newData.val().length <= 1200" },
+        "kind":    { ".validate": "newData.isString() && newData.val().length <= 12" },
+        "name":    { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "uid":     { ".validate": "newData.val() === auth.uid" },
+        "ts":      { ".validate": "newData.isNumber() && newData.val() <= now + 60000" }
+      }
+    },
+
     "chat": {
       ".read": true,
       ".indexOn": "ts",

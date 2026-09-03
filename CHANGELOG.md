@@ -1,10 +1,28 @@
 # Changelog
 
-All notable changes to [Ledger City](https://randomprojects1234.github.io/ledger-city/). Current build: **v1.10**.
+All notable changes to [Ledger City](https://randomprojects1234.github.io/ledger-city/). Current build: **v1.20**.
 
 This file is generated from `js/changelog.js`, which is also what the in-game
 update log reads — click the version badge in the corner. Edit that file, then
-run `node tools/gen-docs.mjs`.
+run `node tools/release.mjs`.
+
+## v1.20 — Bonds, savings, collectibles and bug reports
+*2026-09-03*
+
+- **New** — Bonds. Eight of them, from a 2 year treasury to high yield corporate debt. Prices move against a central bank policy rate, scaled by duration, and each one pays its coupon every minute.
+- **New** — A savings account. Cash parked there is never at risk and earns interest that follows the policy rate. Safe, and deliberately slower than the market.
+- **New** — Collectibles. Twenty-four lots across art, watches, cards, wine and curiosities. They barely notice the stock market and sell 9% below the quoted value, because illiquidity should cost you something.
+- **New** — Twelve more cryptocurrencies and ten more commodities.
+- **New** — Report a bug from inside the game. Reports go to the server for the developer to read, and every report also has a one-click GitHub issue link. Fixes appear in this log.
+- **New** — Live player count in the header, backed by real presence, and a join link that lets a host share their world without anyone else touching Firebase.
+- **Fix** — Progress is now saved after every trade, when the tab is hidden, and when it closes, instead of only every five seconds.
+- **Fix** — A cloud save can no longer overwrite newer local progress on refresh. Whichever is newer wins.
+- **Fix** — Income earned while you were away is capped at four hours. Coming back after a week no longer pays out a fortune in dividends, rent and interest.
+- **Fix** — Positions in an asset removed by an update are refunded at cost instead of silently vanishing. Crypto tickers changed in this release, so old holdings are paid back.
+- **Fix** — The watchlist, savings, bonds and collectibles are all written to the cloud save. Previously the watchlist was dropped.
+- **Fix** — Every module import carries the version, so a release can no longer leave a browser running a half-updated mix of cached files. This was breaking real deploys.
+- **Fix** — Buying a property from its detail window now updates the property table behind it, and rent can be collected straight from the portfolio.
+- **Fix** — Fractional orders are rejected for assets that do not support them, instead of quietly creating a third of a share.
 
 ## v1.10 — Update log
 *2026-09-03*
