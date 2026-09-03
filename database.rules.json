@@ -1,0 +1,88 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "usernames": {
+      ".read": true,
+      "$nameLower": {
+        ".write": "auth != null && (!data.exists() || data.val() === auth.uid)",
+        ".validate": "newData.isString() && newData.val() === auth.uid && $nameLower.matches(/^[a-z0-9_]{3,16}$/)"
+      }
+    },
+
+    "players": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+
+        "name":     { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "cash":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1e15" },
+        "netWorth": { ".validate": "newData.isNumber() && newData.val() < 1e15" },
+        "updated":  { ".validate": "newData.isNumber()" },
+
+        "inbox": {
+          "$item": {
+            "comment": "Any signed-in player may drop a transfer here, but only the owner can read or delete it.",
+            ".write": "auth != null && (auth.uid === $uid ? true : (!data.exists() && newData.exists() && newData.child('from').val() === auth.uid))",
+            ".validate": "newData.hasChildren(['type','from','ts']) && newData.child('from').val() === auth.uid && (newData.child('type').val() === 'cash' || newData.child('type').val() === 'asset')",
+            "amount": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 1e12" },
+            "units":  { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "assetId":{ ".validate": "newData.isString() && newData.val().length <= 40" },
+            "fromName": { ".validate": "newData.isString() && newData.val().length <= 16" },
+            "$other": { ".validate": true }
+          }
+        }
+      }
+    },
+
+    "leaderboard": {
+      ".read": true,
+      ".indexOn": "netWorth",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name','netWorth','ts'])",
+        "name":     { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "netWorth": { ".validate": "newData.isNumber() && newData.val() < 1e15" },
+        "ts":       { ".validate": "newData.isNumber() && newData.val() <= now + 60000" }
+      }
+    },
+
+    "market": {
+      "flow": {
+        ".read": true,
+        "$assetId": {
+          "comment": "Net units bought by all players. Any player may nudge it; the game clamps the effect.",
+          ".write": "auth != null",
+          ".validate": "newData.isNumber() && newData.val() > -5000000001 && newData.val() < 5000000001"
+        }
+      }
+    },
+
+    "feed": {
+      ".read": true,
+      ".indexOn": "ts",
+      "$item": {
+        ".write": "auth != null && !data.exists() && newData.child('uid').val() === auth.uid",
+        ".validate": "newData.hasChildren(['act','sym','ts','uid'])",
+        "sym":  { ".validate": "newData.isString() && newData.val().length <= 24" },
+        "act":  { ".validate": "newData.val() === 'buy' || newData.val() === 'sell'" },
+        "name": { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "$other": { ".validate": true }
+      }
+    },
+
+    "chat": {
+      ".read": true,
+      ".indexOn": "ts",
+      "$msg": {
+        ".write": "auth != null && !data.exists() && newData.child('uid').val() === auth.uid",
+        ".validate": "newData.hasChildren(['name','text','ts'])",
+        "text": { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "name": { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "ts":   { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+        "uid":  { ".validate": "newData.val() === auth.uid" }
+      }
+    }
+  }
+}

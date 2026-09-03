@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ledger City — Multiplayer Investing Sim</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📈</text></svg>">
+<script src="firebase-config.js"></script>
+</head>
+<body>
+
+<!-- ---------------- setup / login ---------------- -->
+<div id="setup" class="setup" hidden>
+  <div class="setup-card">
+    <h1>Ledger City</h1>
+    <div class="ver-line">version <b>v1.0</b></div>
+    <p class="tag">A multiplayer market simulation. 640 companies, 260 properties, crypto,
+       commodities and angel deals — all running on a shared clock.</p>
+    <label>Username</label>
+    <input id="name" maxlength="16" placeholder="e.g. tycoon_01" autocomplete="off">
+    <div class="setup-actions">
+      <button id="btn-online" class="primary">Play online</button>
+      <button id="btn-solo">Play solo</button>
+    </div>
+    <div id="setup-status" class="status"></div>
+    <button id="cfg-toggle" class="linkish">Server settings (Firebase)</button>
+    <div id="cfg-box" hidden>
+      <p class="hint">Paste the <code>firebaseConfig</code> object from your Firebase console.
+        It is stored in this browser only.</p>
+      <textarea id="cfg-json" rows="9" spellcheck="false" placeholder='{ "apiKey": "...", "authDomain": "...", "databaseURL": "https://xxx.firebaseio.com", "projectId": "..." }'></textarea>
+      <button id="cfg-save" class="mini">Save config</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---------------- app ---------------- -->
+<div id="app" hidden>
+  <header>
+    <div class="brand">Ledger&nbsp;City</div>
+    <div class="stat"><span>Net worth</span><b id="hdr-net">$0</b></div>
+    <div class="stat"><span>Cash</span><b id="hdr-cash">$0</b></div>
+    <div class="stat"><span>Rent due</span><b id="hdr-rent">$0</b></div>
+    <div class="stat"><span>LC Index</span><b id="hdr-index">0</b> <i id="hdr-index-ch" class="delta"></i></div>
+    <div class="spacer"></div>
+    <div class="who"><b id="hdr-name"></b><span id="status" class="pill">offline</span></div>
+  </header>
+
+  <div class="ticker"><span id="ticker-text"></span></div>
+
+  <nav>
+    <button class="tab active" data-tab="portfolio">Portfolio</button>
+    <button class="tab" data-tab="stocks">Stocks</button>
+    <button class="tab" data-tab="property">Real Estate</button>
+    <button class="tab" data-tab="alts">Alternatives</button>
+    <button class="tab" data-tab="angel">Angel</button>
+    <button class="tab" data-tab="social">Players</button>
+  </nav>
+
+  <main>
+    <!-- portfolio -->
+    <section class="panel" id="panel-portfolio">
+      <div class="grid2">
+        <div class="card">
+          <h2>Allocation</h2>
+          <div id="alloc"></div>
+          <div class="statgrid">
+            <div><span>Realised P/L</span><b id="stat-realized" class="v">$0</b></div>
+            <div><span>Trades</span><b id="stat-trades" class="v">0</b></div>
+            <div><span>Rent collected</span><b id="stat-rent" class="v">$0</b></div>
+            <div><span>Dividends</span><b id="stat-div" class="v">$0</b></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Market news</h2>
+          <div id="news" class="scroll"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Positions</h2>
+        <div class="row head hrow"><div class="c sym">Asset</div><div class="c num">Qty</div>
+          <div class="c num">Price</div><div class="c num">Value</div><div class="c num">P/L</div></div>
+        <div id="holdings"></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h2>Property portfolio</h2>
+          <div id="myprops"></div>
+        </div>
+        <div class="card">
+          <h2>Activity</h2>
+          <div id="activity" class="scroll"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- stocks -->
+    <section class="panel" id="panel-stocks" hidden>
+      <div class="card">
+        <div class="controls">
+          <input id="f-search" placeholder="Search ticker or company">
+          <select id="f-sector"><option value="all">All sectors</option></select>
+          <select id="f-sort">
+            <option value="cap">Sort: market cap</option>
+            <option value="gain">Sort: top gainers</option>
+            <option value="loss">Sort: top losers</option>
+            <option value="price">Sort: price</option>
+            <option value="name">Sort: name</option>
+          </select>
+          <span id="f-count" class="count"></span>
+        </div>
+        <div class="row head arow"><div class="c sym">Company</div><div class="c tag">Sector</div>
+          <div class="c num">Price</div><div class="c num">Change</div><div class="c spark">Trend</div>
+          <div class="c num">Owned</div></div>
+        <div id="stock-body"></div>
+        <button id="f-more" class="more">Load more</button>
+      </div>
+    </section>
+
+    <!-- property -->
+    <section class="panel" id="panel-property" hidden>
+      <div class="card">
+        <div class="controls">
+          <select id="p-region"><option value="all">All districts</option></select>
+          <select id="p-type"><option value="all">All types</option></select>
+          <button id="p-collect" class="mini">Collect rent</button>
+          <span id="p-count" class="count"></span>
+        </div>
+        <div class="row head prow"><div class="c sym">Property</div><div class="c tag">Type</div>
+          <div class="c num">Value</div><div class="c num">Net rent</div><div class="c num">Trend</div>
+          <div class="c act"></div></div>
+        <div id="prop-body"></div>
+        <button id="p-more" class="more">Load more</button>
+      </div>
+    </section>
+
+    <!-- alternatives -->
+    <section class="panel" id="panel-alts" hidden>
+      <div class="card">
+        <h2>Crypto &amp; commodities</h2>
+        <p class="hint">Fractional units allowed. Crypto here is deliberately violent — position sizes matter.</p>
+        <div class="row head arow"><div class="c sym">Asset</div><div class="c tag">Class</div>
+          <div class="c num">Price</div><div class="c num">Change</div><div class="c spark">Trend</div>
+          <div class="c num">Owned</div></div>
+        <div id="alt-body"></div>
+      </div>
+    </section>
+
+    <!-- angel -->
+    <section class="panel" id="panel-angel" hidden>
+      <div class="card">
+        <h2>Angel deals <small>new slate in <span id="angel-next"></span></small></h2>
+        <p class="hint">Back a startup and wait. Most fail outright; a few return 10x or more.</p>
+        <div id="angel-body" class="cards"></div>
+      </div>
+      <div class="card">
+        <h2>Your positions</h2>
+        <div id="angel-mine"></div>
+      </div>
+    </section>
+
+    <!-- social -->
+    <section class="panel" id="panel-social" hidden>
+      <div class="grid2">
+        <div class="card">
+          <h2>Leaderboard</h2>
+          <div id="board"></div>
+        </div>
+        <div class="card">
+          <h2>Live tape</h2>
+          <div id="feed" class="scroll"></div>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h2>Send money or shares</h2>
+          <div class="form">
+            <input id="tr-user" placeholder="Recipient username">
+            <input id="tr-amount" type="number" placeholder="Amount (cash) or quantity (shares)">
+            <input id="tr-asset" placeholder="Ticker (leave blank to send cash)">
+            <button id="tr-send" class="primary">Send</button>
+          </div>
+          <p class="hint">Leave the ticker empty to wire cash. Fill it in to hand over shares or coins.</p>
+        </div>
+        <div class="card">
+          <h2>Trading floor chat</h2>
+          <div id="chat" class="scroll"></div>
+          <div class="form inline">
+            <input id="chat-input" maxlength="200" placeholder="Say something">
+            <button id="chat-send" class="mini">Send</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ---------------- asset modal ---------------- -->
+<div id="modal" hidden>
+  <div class="sheet">
+    <button id="modal-close" class="x">&times;</button>
+    <h2 id="m-title"></h2>
+    <div id="m-sub" class="sub"></div>
+    <div class="pricerow"><b id="m-price"></b><span id="m-change" class="m-change"></span></div>
+    <canvas id="m-chart" height="220"></canvas>
+    <div id="m-facts" class="facts"></div>
+    <div id="m-trade" class="trade">
+      <input id="m-qty" type="number" step="any" min="0">
+      <button id="m-max" class="mini">Max</button>
+      <button id="m-all" class="mini">All owned</button>
+      <button id="m-buy" class="primary">Buy</button>
+      <button id="m-sell" class="danger">Sell</button>
+    </div>
+    <div id="m-proptrade" class="trade" hidden>
+      <button id="m-pbuy" class="primary">Buy property</button>
+      <button id="m-psell" class="danger">Sell property</button>
+    </div>
+  </div>
+</div>
+
+<div id="version" title="Ledger City build">v1.0</div>
+<div id="toast" hidden></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
