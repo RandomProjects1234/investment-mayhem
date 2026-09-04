@@ -2,14 +2,18 @@
 import { generateCompanies, generateFunds, generateProperties, generateAlts,
          generateBonds, generateCollectibles, generateCountries, generateStartups, startupOutcome,
          generateFilms, filmOutcome, FILM_ROUND_TICKS, STREET_LOTS, streetOutcome,
-         STARTUP_ROUND_TICKS, COLLECT_SPREAD, SECTORS } from './data.js?v=2.0';
+         STARTUP_ROUND_TICKS, COLLECT_SPREAD, SECTORS } from './data.js?v=2.1';
 import { priceAt, priceNow, nowTick, TICK_MS, policyRate, setFlow,
          quoteOption, nextExpiries, strikeLadder, realisedVol,
-         isVacant, occupiedFraction } from './market.js?v=2.0';
-import * as Cup from './cup.js?v=2.0';
-import * as Net from './net.js?v=2.0';
+         isVacant, occupiedFraction } from './market.js?v=2.1';
+import * as Rivals from './rivals.js?v=2.1';
+import * as Cup from './cup.js?v=2.1';
+import * as Net from './net.js?v=2.1';
 
-export const FEE = 0.002;            // 0.2% trading commission
+// Halved in v2.1. A player reported that a stock "immediately goes down once
+// you buy it": most of that was the commission showing up as an instant paper
+// loss the moment the trade settled.
+export const FEE = 0.001;            // 0.1% trading commission
 export const PROP_CLOSING = 0.03;    // 3% closing cost on property purchase
 export const MORTGAGE_MAX = 0.7;     // you can finance up to 70% of a building
 export const MORTGAGE_SPREAD = 1.5;  // mortgage rate = policy rate + this
@@ -44,6 +48,10 @@ export const ASSETS = new Map();
 for (const a of [...COMPANIES, ...PROPERTIES, ...ALTS, ...BONDS, ...COLLECTIBLES, ...COUNTRIES]) ASSETS.set(a.id, a);
 Net.registerKeys([...ASSETS.keys()]);
 
+// Hand the universe to the rival traders so they can trade the same market.
+Rivals.setUniverse({ stocks: STOCKS, funds: FUNDS, alts: ALTS, bonds: BONDS });
+export { Rivals };
+
 export const startupRound = () => Math.floor(nowTick() / STARTUP_ROUND_TICKS);
 export function currentStartups() { return generateStartups(startupRound()); }
 export const rateNow = () => policyRate(nowTick());
@@ -72,7 +80,8 @@ function blankState() {
     startNetWorth: START_CASH, startIndex: 0,
     // Seasons rank you on what you made this week, not on who started first.
     season: { index: seasonIndex(), startNetWorth: START_CASH, startedAt: Date.now() },
-    stats: { trades: 0, realized: 0, rentCollected: 0, dividends: 0, coupons: 0, interest: 0, sovereign: 0 },
+    stats: { trades: 0, realized: 0, rentCollected: 0, dividends: 0, coupons: 0, interest: 0,
+             sovereign: 0, fees: 0 },
     watch: {}, nwHistory: [],
     netWorth: START_CASH, lastDividend: Date.now(),
     log: [], savedAt: 0,
@@ -106,13 +115,66 @@ export function toggleWatch(id) {
 export const isWatched = id => !!state.watch[id];
 
 // ---- persistence -------------------------------------------------------
-const LS_KEY = () => 'is_save_' + (Net.Net.uid || 'solo');
+// ---- save slots --------------------------------------------------------
+// Three runs side by side, so a bad start is not the end of it. Asked for three
+// times: twice by Yesmans and once by johnchicken.
+export const SLOTS = 3;
+export let SLOT = 1;
+try { SLOT = Math.min(SLOTS, Math.max(1, Number(localStorage.getItem('is_slot') || 1))); } catch (e) {}
+
+export function setSlot(n) {
+  SLOT = Math.min(SLOTS, Math.max(1, Number(n) || 1));
+  try { localStorage.setItem('is_slot', String(SLOT)); } catch (e) {}
+  return SLOT;
+}
+
+const scope = () => Net.Net.uid || 'solo';
+const LS_KEY = (slot = SLOT, sc = scope()) => 'is_save_' + sc + '_' + slot;
+const LEGACY_KEY = (sc = scope()) => 'is_save_' + sc;
+
+// Online identity is per slot, so two runs from the same browser are two
+// different players as far as the server is concerned.
+export const slotKey = () => (Net.Net.uid || 'solo') + '_s' + SLOT;
+
+function readSlot(slot, sc) {
+  try {
+    let raw = localStorage.getItem(LS_KEY(slot, sc));
+    // A save made before slots existed becomes slot 1.
+    if (!raw && slot === 1) raw = localStorage.getItem(LEGACY_KEY(sc));
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+export function slotSummary(slot) {
+  const solo = readSlot(slot, 'solo');
+  const mine = Net.Net.uid ? readSlot(slot, Net.Net.uid) : null;
+  const save = mine || solo;
+  if (!save) return { slot, empty: true };
+  return {
+    slot, empty: false,
+    name: save.name || 'unnamed',
+    netWorth: save.netWorth || save.cash || 0,
+    savedAt: save.savedAt || 0,
+    trades: (save.stats && save.stats.trades) || 0,
+  };
+}
+
+// Wipe a slot back to a fresh $100,000. Only ever called on an explicit,
+// confirmed click: this deletes that run.
+export function resetSlot(slot) {
+  for (const sc of ['solo', Net.Net.uid].filter(Boolean)) {
+    try {
+      localStorage.removeItem(LS_KEY(slot, sc));
+      if (slot === 1) localStorage.removeItem(LEGACY_KEY(sc));
+    } catch (e) {}
+  }
+  if (slot === SLOT) Object.assign(state, blankState());
+  return true;
+}
 
 export function loadLocal() {
-  try {
-    const raw = localStorage.getItem(LS_KEY());
-    if (raw) Object.assign(state, JSON.parse(raw));
-  } catch (e) { /* a corrupt save should never block the game */ }
+  const save = readSlot(SLOT);
+  if (save) Object.assign(state, save);
   migrate();
 }
 
@@ -170,7 +232,8 @@ export function migrate() {
 // being silently replaced by a fresh $100,000.
 export function importSoloSave() {
   try {
-    const raw = localStorage.getItem('is_save_solo');
+    const raw = localStorage.getItem('is_save_solo_' + SLOT) ||
+      (SLOT === 1 ? localStorage.getItem('is_save_solo') : null);
     if (!raw) return false;
     const solo = JSON.parse(raw);
     if (!solo || typeof solo.cash !== 'number') return false;
@@ -421,6 +484,7 @@ export function buy(assetId, units) {
   const cost = px * units * (1 + FEE);
   if (cost > state.cash) return { ok: false, msg: 'Not enough cash (need ' + fmt(cost) + ').' };
   state.cash -= cost;
+  state.stats.fees = (state.stats.fees || 0) + px * units * FEE;
   const pos = book[assetId] || { [key]: 0, cost: 0 };
   pos[key] += units; pos.cost += cost;
   book[assetId] = pos;
@@ -451,6 +515,7 @@ export function sell(assetId, units) {
   if (!(units > 0)) return { ok: false, msg: 'You do not own that many.' };
   const px = priceNow(a) * (1 - spreadOf(a));
   const gross = px * units * (1 - FEE);
+  state.stats.fees = (state.stats.fees || 0) + px * units * FEE;
   const basis = pos.cost * (units / pos[key]);
   pos.cost -= basis; pos[key] -= units;
   if (pos[key] <= 1e-9) delete book[assetId];
@@ -1196,9 +1261,29 @@ function sampleNetWorth() {
   if (state.nwHistory.length > 480) state.nwHistory.splice(0, state.nwHistory.length - 480);
 }
 
+// The public card other players can look at.
+export function publicProfile() {
+  const v = positionsValue();
+  const top = Object.keys(state.holdings)
+    .map(id => ({ id, val: (state.holdings[id].shares || 0) * priceNow(ASSETS.get(id) || { base: 0 }) }))
+    .sort((a, b) => b.val - a.val).slice(0, 3)
+    .map(x => (ASSETS.get(x.id) || {}).ticker).filter(Boolean).join(', ');
+  return {
+    name: state.name || 'anon',
+    netWorth: Math.round(state.netWorth || 0),
+    ret: Math.round(seasonReturn() * 100) / 100,
+    trades: state.stats.trades || 0,
+    top: top || 'nothing yet',
+    since: state.created || Date.now(),
+  };
+}
+
 export function saveNow() {
   saveLocal();
-  if (Net.Net.online) Net.savePlayer(state, seasonIndex(), seasonReturn()).catch(() => {});
+  if (Net.Net.online) {
+    Net.savePlayer(state, seasonIndex(), seasonReturn()).catch(() => {});
+    Net.saveProfile(publicProfile());
+  }
 }
 
 export function startLoop() {
@@ -1216,9 +1301,10 @@ export function startLoop() {
     onTickCb();
     const now = Date.now();
     if (now - lastSave > 5000) { saveLocal(); lastSave = now; }
-    if (Net.Net.online && now - lastCloud > 15000) {
+    if (Net.Net.online && now - lastCloud > 6000) {
       lastCloud = now;
       Net.savePlayer(state, seasonIndex(), seasonReturn()).catch(() => {});
+      Net.saveProfile(publicProfile());
     }
   };
   step();

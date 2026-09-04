@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Investment Mayhem — Multiplayer Investing Sim</title>
-<link rel="stylesheet" href="style.css?v=2.0">
+<link rel="stylesheet" href="style.css?v=2.1">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📈</text></svg>">
-<script src="firebase-config.js?v=2.0"></script>
+<script src="firebase-config.js?v=2.1"></script>
 </head>
 <body>
 
@@ -14,11 +14,13 @@
 <div id="setup" class="setup" hidden>
   <div class="setup-card">
     <h1>Investment Mayhem</h1>
-    <div class="ver-line">version <b>v2.0</b> &middot; <button id="cl-open" class="linkish inline">what's new</button></div>
+    <div class="ver-line">version <b>v2.1</b> &middot; <button id="cl-open" class="linkish inline">what's new</button></div>
     <p class="tag">A multiplayer market simulation. 624 real listed companies, 10 index funds,
        260 properties, crypto, commodities and angel deals — all on one shared clock.</p>
     <p class="disclaimer">Ticker symbols and company names are real; <b>every price in this game is
        simulated</b> and has no relationship to the actual market. Not financial advice.</p>
+    <label>Save slot</label>
+    <div id="slot-picker" class="slots"></div>
     <label>Username</label>
     <input id="name" maxlength="16" placeholder="e.g. tycoon_01" autocomplete="off">
     <div class="setup-actions">
@@ -85,6 +87,7 @@
             <div><span>Coupons</span><b id="stat-coupons" class="v">$0</b></div>
             <div><span>Interest</span><b id="stat-interest" class="v">$0</b></div>
             <div><span>Sovereign yield</span><b id="stat-sovereign" class="v">$0</b></div>
+            <div><span>Commission paid</span><b id="stat-fees" class="v">$0</b></div>
           </div>
         </div>
         <div class="card">
@@ -371,6 +374,11 @@
     <section class="panel" id="panel-social" hidden>
       <div class="grid2">
         <div class="card">
+          <h2>Players <small id="online-count"></small></h2>
+          <div id="profile-card" class="profile"></div>
+          <div id="online-list" class="onlinelist"></div>
+        </div>
+        <div class="card">
           <h2>Leaderboard <small id="season-label"></small></h2>
           <div class="controls">
             <select id="season-pick"></select>
@@ -379,6 +387,8 @@
           <p class="hint">Seasons run a week and rank you on what you made since it started, so
             joining late costs you nothing. Nobody loses their portfolio when one ends.</p>
           <div id="board"></div>
+          <p class="hint">Tap a name to see how they are doing. The eight in italics are simulated
+            rivals: they trade the same market you do, rebalancing every four hours.</p>
         </div>
         <div class="card">
           <h2>Live tape</h2>
@@ -403,6 +413,7 @@
             <input id="chat-input" maxlength="200" placeholder="Say something">
             <button id="chat-send" class="mini">Send</button>
           </div>
+          <div id="chat-status" class="status"></div>
         </div>
       </div>
     </section>
@@ -465,7 +476,7 @@
 </div>
 
 <button id="report-open" title="Report a bug">Report a bug</button>
-<button id="version" title="Update log">v2.0</button>
+<button id="version" title="Update log">v2.1</button>
 
 <!-- ---------------- bug report ---------------- -->
 <div id="report" hidden>
@@ -500,12 +511,12 @@
   <div class="sheet">
     <button id="cl-close" class="x">&times;</button>
     <h1 class="cl-h">Investment Mayhem</h1>
-    <div class="ver-line">update log &middot; <b id="cl-version">v2.0</b></div>
+    <div class="ver-line">update log &middot; <b id="cl-version">v2.1</b></div>
     <div id="cl-next"></div>
     <div id="cl-body"></div>
   </div>
 </div>
 <div id="toast" hidden></div>
-<script type="module" src="js/main.js?v=2.0"></script>
+<script type="module" src="js/main.js?v=2.1"></script>
 </body>
 </html>

@@ -1,9 +1,23 @@
 // Release history and roadmap. Rendered in-game (click the version badge) and
 // mirrored in CHANGELOG.md / ROADMAP.md so the repo tells the same story.
 
-export const VERSION = 'v2.0';
+export const VERSION = 'v2.1';
 
 export const RELEASES = [
+  {
+    version: 'v2.1',
+    date: '2026-09-04',
+    title: 'Save slots, rivals, and a Players tab worth opening',
+    items: [
+      ['new', 'Three save slots. Pick one on the menu, each keeps its own run, and each has a Restart that wipes it back to a hundred thousand. Asked for three times: twice by Yesmans and once by johnchicken, who wanted a way out of a bad start. A slot is its own player online too, with its own name and its own place on the board.'],
+      ['new', 'Eight rival traders on the leaderboard, so it is never empty and there is always something to beat. IndexAnt just buys the broad fund. MomentumMo chases whatever ran hardest, DipDiana buys whatever fell instead, CoinCarl is crypto only, BondBarb is smug when rates fall, CashCliff mostly waits. They trade the real market on a four hour rebalance and need no server: a rival is a pure function of the same prices you see, so every browser agrees on their net worth to the cent.'],
+      ['new', 'The Players tab has been rebuilt. Tap anyone on the board, human or rival, to see their card: net worth, season return, trades, biggest holdings and how long they have been playing. There is a list of who is online, and chat now shows timestamps. Asked for by johnchicken.'],
+      ['fix', 'Chat was genuinely broken, and so was half the live tape. Every list read from the server stopped after its first entry: the code walked the results with a callback that returned the new array length, and the database treats any truthy return as "stop here". Messages sent fine and were stored fine, which is why it looked like they vanished. Chat went from showing one message to showing all of them, and the tape from one trade to thirty. Reported by johnchicken.'],
+      ['fix', 'Transfers had the same fault, so a batch of incoming gifts would only ever hand over the first one.'],
+      ['bal', 'Commission halved to 0.1%, and the total you have paid is now on the portfolio. A player reported that a stock "immediately goes down once you buy it": most of that was the commission landing as an instant paper loss, and it was never labelled. Reported by Yesman.'],
+      ['fix', 'Everything on the server syncs every six seconds instead of fifteen, so other players and the board stop feeling a step behind. Reported by johnchicken.'],
+    ],
+  },
   {
     version: 'v2.0',
     date: '2026-09-03',
@@ -163,21 +177,21 @@ export const RELEASES = [
 
 // What the next update is aiming at. Ordered by what would change the game most.
 export const NEXT = {
-  version: 'v2.1',
-  title: 'Whatever you ask for next',
+  version: 'v2.2',
+  title: 'Whatever comes in next',
   items: [
     ['Your reports',
-     'The request list is empty for the first time. Everything that came in through the report button has been built, so what happens next is up to whoever files the next one.'],
+     'Every idea filed through the report button has been built so far. The queue is what decides this one, so file what you want.'],
+    ['Rivals with opinions',
+     'The eight rivals trade but never speak. Letting them post to the tape when they rotate would make a quiet server feel a lot busier.'],
     ['Price alerts',
-     'Tell the game to shout when something crosses a level, instead of watching for it. The order engine already replays the ticks you missed, so an alert can tell you what happened while you were away.'],
+     'Tell the game to shout when something crosses a level. The order engine already replays the ticks you missed, so an alert can tell you what happened while you were away.'],
     ['A first run walkthrough',
-     'There is a great deal in here now: stocks, funds, property, bonds, savings, collectibles, countries, films, angel deals, the cup, the league, the street market, orders, shorts, margin and options. A new player deserves a guided first ten minutes.'],
-    ['Trade history you can take with you',
-     'Export your fills so a season can be argued about properly.'],
+     'There is a great deal in here now. A new player deserves a guided first ten minutes.'],
   ],
   later: [
     ['Server-authoritative trading and settling',
-     'The honest fix for both cheating and predictable results: run trades and settlements on a server so a browser cannot invent an outcome. It needs Firebase on the paid plan, so it is a decision to make rather than a thing to code.'],
-    ['Bots', 'A few simulated traders so a quiet server still has a market worth beating.'],
+     'The honest fix for cheating and for predictable cup results: run trades and settlements on a server so a browser cannot invent an outcome. It needs Firebase on the paid plan, so it is a decision to make rather than a thing to code.'],
+    ['Trade history export', 'Take your fills away as a file.'],
   ],
 };

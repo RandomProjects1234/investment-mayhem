@@ -1,13 +1,14 @@
 // All DOM rendering. Rows are built once per filter change and only their
 // number cells are rewritten on each tick, so 640 stocks stay smooth.
-import * as G from './game.js?v=2.0';
+import * as G from './game.js?v=2.1';
 import { priceNow, priceAt, changePct, history, nowTick, marketIndex,
          recentEvents, flowOf, flowImpact, policyRate, bondYield,
-         nextEarningsTick, earningsQuarter, earningsSurprise, isVacant } from './market.js?v=2.0';
-import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=2.0';
-import * as Cup from './cup.js?v=2.0';
-import * as Net from './net.js?v=2.0';
-import { RELEASES, NEXT, VERSION } from './changelog.js?v=2.0';
+         nextEarningsTick, earningsQuarter, earningsSurprise, isVacant } from './market.js?v=2.1';
+import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=2.1';
+import * as Rivals from './rivals.js?v=2.1';
+import * as Cup from './cup.js?v=2.1';
+import * as Net from './net.js?v=2.1';
+import { RELEASES, NEXT, VERSION } from './changelog.js?v=2.1';
 
 const $ = s => document.querySelector(s);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -203,6 +204,8 @@ function renderPortfolio() {
   $('#stat-coupons').textContent = G.fmt(st.coupons || 0);
   $('#stat-interest').textContent = G.fmt(st.interest || 0);
   $('#stat-sovereign').textContent = G.fmt(st.sovereign || 0);
+  const feeEl = $('#stat-fees');
+  if (feeEl) feeEl.textContent = G.fmt(st.fees || 0);
   renderAnalytics(v);
 
   // Holdings tables rebuild at most twice a second; they are small.
@@ -668,6 +671,42 @@ function tickCountryRows() {
   }
 }
 
+// ---------------- player profiles ----------------
+// johnchicken asked to be able to check other players' stats. Everyone online
+// publishes a small public card; this shows it.
+async function showProfile(row) {
+  const box = $('#profile-card');
+  if (row.bot) {
+    const r = Rivals.RIVALS.find(x => 'bot:' + x.id === row.uid);
+    box.innerHTML =
+      '<div class="pname">' + escapeHtml(row.name) + ' <span class="bottag">rival</span></div>' +
+      '<div class="hint">' + escapeHtml(r ? r.blurb : '') + '</div>' +
+      '<div class="pgrid">' +
+        '<div><span>Net worth</span><b>' + G.fmt(row.netWorth) + '</b></div>' +
+        '<div><span>Return</span><b class="' + cls(row.ret) + '">' + G.fmtPct(row.ret) + '</b></div>' +
+        '<div><span>Holding now</span><b>' + escapeHtml(row.holding || '-') + '</b></div>' +
+      '</div>';
+    return;
+  }
+  box.innerHTML = '<div class="hint">Loading ' + escapeHtml(row.name || 'player') + '...</div>';
+  const p = await Net.loadProfile(row.uid).catch(() => null);
+  if (!p) {
+    box.innerHTML = '<div class="pname">' + escapeHtml(row.name || 'anon') + '</div>' +
+      '<div class="hint">No public card yet. It appears once they have played a little.</div>';
+    return;
+  }
+  const mins = Math.max(1, Math.round((Date.now() - (p.since || Date.now())) / 60000));
+  box.innerHTML =
+    '<div class="pname">' + escapeHtml(p.name || 'anon') + '</div>' +
+    '<div class="pgrid">' +
+      '<div><span>Net worth</span><b>' + G.fmt(p.netWorth) + '</b></div>' +
+      '<div><span>Season return</span><b class="' + cls(p.ret || 0) + '">' + G.fmtPct(p.ret || 0) + '</b></div>' +
+      '<div><span>Trades</span><b>' + (p.trades || 0) + '</b></div>' +
+      '<div><span>Biggest holdings</span><b>' + escapeHtml(p.top || '-') + '</b></div>' +
+      '<div><span>Playing for</span><b>' + (mins > 90 ? Math.round(mins / 60) + 'h' : mins + 'm') + '</b></div>' +
+    '</div>';
+}
+
 // ---------------- the cup ----------------
 let cupRows = [];
 
@@ -940,13 +979,33 @@ function tickBank() {
 }
 
 // ---------------- presence ----------------
+let onlineNames = [];
+
 function setOnline(names) {
+  onlineNames = names || [];
   const pill = $('#hdr-online');
-  if (!names || !names.length) { pill.hidden = true; return; }
-  pill.hidden = false;
-  pill.className = 'pill ok';
-  pill.textContent = names.length + (names.length === 1 ? ' player online' : ' players online');
-  pill.title = names.join(', ');
+  if (!onlineNames.length) { pill.hidden = true; } else {
+    pill.hidden = false;
+    pill.className = 'pill ok';
+    pill.textContent = onlineNames.length + (onlineNames.length === 1 ? ' player online' : ' players online');
+    pill.title = onlineNames.join(', ');
+  }
+  renderOnlineList();
+}
+
+function renderOnlineList() {
+  const box = $('#online-list');
+  if (!box) return;
+  box.innerHTML = '';
+  $('#online-count').textContent = Net.Net.online
+    ? onlineNames.length + ' online now'
+    : 'solo on this device';
+  if (!Net.Net.online) return;
+  for (const n of onlineNames) {
+    const chip = el('span', 'onlinechip' + (n === G.state.name ? ' me' : ''), n);
+    box.appendChild(chip);
+  }
+  if (!onlineNames.length) box.appendChild(el('span', 'hint', 'Nobody else is on right now.'));
 }
 
 // ---------------- bug reports ----------------
@@ -1216,6 +1275,7 @@ let archive = [];
 
 function renderLeaderboard() {
   buildSeasonPicker();
+  renderOnlineList();
   const current = G.seasonIndex();
   $('#season-label').textContent = 'Season ' + (current + 1);
   $('#season-left').textContent = seasonCountdown();
@@ -1227,18 +1287,29 @@ function renderLeaderboard() {
             netWorth: G.state.netWorth, ret: G.seasonReturn() }])
     : archive;
 
+  // Rivals stand alongside the humans, so the board is never empty and there is
+  // always something to beat.
+  const all = live ? rows.concat(Rivals.board()) : rows.slice();
+  all.sort((a, b) => (b.ret || 0) - (a.ret || 0));
+
+  const me = Net.Net.online ? Net.slotKey() : null;
   const b = $('#board'); b.innerHTML = '';
-  if (!rows.length) b.appendChild(el('div', 'empty', 'Nobody posted a score that season.'));
-  rows.forEach((r, i) => {
-    const d = el('div', 'row brow' + (r.uid === Net.Net.uid ? ' me' : ''));
+  if (!all.length) b.appendChild(el('div', 'empty', 'Nobody posted a score that season.'));
+  all.forEach((r, i) => {
+    const d = el('div', 'row brow' + (r.uid === me ? ' me' : '') + (r.bot ? ' botrow' : ''));
     const ret = typeof r.ret === 'number' ? r.ret : 0;
     d.innerHTML = '<div class="c rank">#' + (i + 1) + '</div>' +
       '<div class="c sym"><b>' + escapeHtml(r.name || 'anon') + '</b>' +
+        (r.bot ? '<span class="bottag">rival</span>' : '') +
         '<span>' + G.fmt(r.netWorth) + '</span></div>' +
       '<div class="c num ' + cls(ret) + '">' + G.fmtPct(ret) + '</div>';
+    d.addEventListener('click', () => showProfile(r));
     b.appendChild(d);
   });
-  if (!Net.Net.online) b.appendChild(el('div', 'empty', 'Solo mode - connect Firebase to see other players.'));
+  if (!Net.Net.online) {
+    b.appendChild(el('div', 'empty',
+      'Playing solo, so the humans are missing - the rivals above are still real opponents.'));
+  }
 }
 
 function renderFeed() {
@@ -1254,9 +1325,16 @@ function renderFeed() {
 
 function renderChat() {
   const b = $('#chat'); b.innerHTML = '';
+  if (!chat.length) {
+    b.appendChild(el('div', 'empty', Net.Net.online
+      ? 'Nothing said yet. Say hello.'
+      : 'Chat needs an online server. Press Play online from the menu.'));
+  }
   for (const m of chat) {
     const d = el('div', 'chatline');
-    d.innerHTML = '<b>' + escapeHtml(m.name || 'anon') + ':</b> ' + escapeHtml(m.text || '');
+    const when = m.ts ? new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    d.innerHTML = '<b>' + escapeHtml(m.name || 'anon') + ':</b> ' + escapeHtml(m.text || '') +
+      '<span class="when">' + when + '</span>';
     b.appendChild(d);
   }
   b.scrollTop = b.scrollHeight;
@@ -1279,11 +1357,18 @@ function buildTransfer() {
   $('#chat-send').addEventListener('click', sendChatMsg);
   $('#chat-input').addEventListener('keydown', e => { if (e.key === 'Enter') sendChatMsg(); });
 }
-function sendChatMsg() {
+async function sendChatMsg() {
   const v = $('#chat-input').value.trim();
+  const status = $('#chat-status');
   if (!v) return;
-  Net.sendChat(v);
-  $('#chat-input').value = '';
+  status.textContent = '';
+  try {
+    await Net.sendChat(v);
+    $('#chat-input').value = '';
+  } catch (e) {
+    // This used to fail silently, which is why a player reported chat as broken.
+    status.textContent = e.message;
+  }
 }
 
 // ---------------- asset modal ----------------

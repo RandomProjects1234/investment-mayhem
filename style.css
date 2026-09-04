@@ -354,4 +354,29 @@ h2 .mini{float:right;margin-top:-4px}
   .leaguerow>.c:nth-child(4),.leaguerow>.c:nth-child(5),.leaguerow>.c:nth-child(6){display:none}
 }
 
+/* ---------- v2.1: slots, rivals, profiles ---------- */
+.slots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.slot{border:1px solid var(--line);background:#0e1521;border-radius:10px;padding:9px;cursor:pointer;
+  text-align:left;display:flex;flex-direction:column;gap:2px;min-height:76px}
+.slot:hover{border-color:#33465e}
+.slot.on{border-color:var(--accent);background:#132033}
+.slot b{font-size:12px}
+.slot span{font-size:11px;color:var(--dim);font-family:var(--mono)}
+.slot .wipe{align-self:flex-start;margin-top:4px;font-size:10px;padding:2px 6px;border-radius:5px;
+  border:1px solid #5c2a34;background:#3a1b22;color:#ff9aa4}
+.slot .wipe:hover{filter:brightness(1.2)}
+.botrow b{font-style:italic}
+.bottag{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#9fb0c4;border:1px solid var(--line);
+  border-radius:4px;padding:1px 5px;margin-left:6px}
+.profile{min-height:20px}
+.profile .pname{font-size:15px;font-weight:600}
+.profile .pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:8px}
+.profile .pgrid span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
+.profile .pgrid b{font-family:var(--mono);font-size:13px}
+.onlinelist{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.onlinechip{font-size:11px;border:1px solid var(--line);border-radius:99px;padding:2px 9px;color:#9fb0c4}
+.onlinechip.me{border-color:#24405f;color:#cfe0ff}
+.chatline .when{color:#5d6c80;font-size:10px;font-family:var(--mono);margin-left:6px}
+@media(max-width:600px){.slots{grid-template-columns:1fr}}
+
 [hidden]{display:none !important}

@@ -9,8 +9,8 @@
 // running it. That also means a player reading this file could work out a
 // result before backing it; the honest fix is settling from a server, which is
 // the same open problem as the rest of the game and is on the roadmap.
-import { rngFrom, hashF } from './rng.js?v=2.0';
-import { nowTick } from './market.js?v=2.0';
+import { rngFrom, hashF } from './rng.js?v=2.1';
+import { nowTick } from './market.js?v=2.1';
 
 export const EDITION_TICKS = 1200;        // a new tournament every hour
 export const OPEN_WINDOW = 300;           // the first 15 minutes are for betting

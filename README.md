@@ -154,6 +154,19 @@ architecture does not change.
 - **Bug reports** — the "Report a bug" button files a report to the server for the developer
   to read, and offers a one-click prefilled GitHub issue. Fixes are listed in the update log.
 
+## Save slots
+
+Three runs side by side, chosen on the menu, each with its own Restart. A slot is its own
+player online too: `usernames/{name}` maps to `{uid}_s{slot}`, saves live at
+`players/{uid}/s{slot}`, and the board, profiles and presence are all keyed the same way.
+
+## Rival traders
+
+Eight simulated investors sit on the leaderboard so it is never empty. Each holds an equally
+weighted basket and rebalances every four hours, and because a rival's choice is a pure
+function of prices that are themselves a pure function of the tick, every client replays the
+identical rivals with no server and no storage.
+
 ## Saving
 
 Progress is written to `localStorage` after every trade, when the tab is hidden, when it

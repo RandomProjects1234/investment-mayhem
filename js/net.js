@@ -8,6 +8,7 @@ const CDN = 'https://www.gstatic.com/firebasejs/10.12.5/';
 export const Net = {
   online: false,
   uid: null,
+  slot: 1,          // which save slot this session is playing
   name: null,
   _db: null, _fb: null, _app: null,
   _listeners: [],
@@ -67,21 +68,30 @@ export async function connect(cfg) {
 
 const R = p => Net._fb.ref(Net._db, p);
 
+// Every slot is its own player as far as the server is concerned, so three runs
+// from one browser are three separate names, profiles and board entries.
+export const slotKey = () => Net.uid + '_s' + Net.slot;
+const playerPath = (uid = Net.uid, slot = Net.slot) => 'players/' + uid + '/s' + slot;
+export function splitKey(key) {
+  const m = /^(.+)_s(\d+)$/.exec(key || '');
+  return m ? { uid: m[1], slot: Number(m[2]) } : { uid: key, slot: 1 };
+}
+
 // ---- profile / username ------------------------------------------------
 export async function claimUsername(name) {
   const key = name.toLowerCase();
   const { get, set } = Net._fb;
   const snap = await get(R('usernames/' + key));
-  if (snap.exists() && snap.val() !== Net.uid) {
+  if (snap.exists() && snap.val() !== slotKey()) {
     throw new Error('That username is already taken on this server.');
   }
-  await set(R('usernames/' + key), Net.uid);
+  await set(R('usernames/' + key), slotKey());
   Net.name = name;
   return true;
 }
 
 export async function loadPlayer() {
-  const snap = await Net._fb.get(R('players/' + Net.uid));
+  const snap = await Net._fb.get(R(playerPath()));
   return snap.exists() ? snap.val() : null;
 }
 
@@ -109,7 +119,7 @@ export async function savePlayer(state, season, seasonRet) {
     watch: state.watch || {}, stats: state.stats || {},
   };
   try {
-    await update(R('players/' + Net.uid), payload);
+    await update(R(playerPath()), payload);
     SaveState.lastOk = Date.now();
     SaveState.lastError = null;
   } catch (e) {
@@ -121,7 +131,7 @@ export async function savePlayer(state, season, seasonRet) {
   // hard to post. A refusal here is not a broken save, so it is reported
   // separately rather than as a failure.
   try {
-    await set(R('leaderboard/' + season + '/' + Net.uid), {
+    await set(R('leaderboard/' + season + '/' + slotKey()), {
       name: state.name,
       netWorth: Math.round(state.netWorth || 0),
       ret: Math.round((seasonRet || 0) * 100) / 100,
@@ -131,6 +141,22 @@ export async function savePlayer(state, season, seasonRet) {
   } catch (e) {
     SaveState.throttled = true;
   }
+}
+
+// A small public card about a player: enough for someone to see how you are
+// doing without exposing your whole book.
+export async function saveProfile(profile) {
+  if (!Net.online) return;
+  const { set } = Net._fb;
+  try {
+    await set(R('profiles/' + slotKey()), { ...profile, ts: Date.now() });
+  } catch (e) { /* a profile is optional; never break the save over it */ }
+}
+
+export async function loadProfile(key) {
+  if (!Net.online) return null;
+  const snap = await Net._fb.get(R('profiles/' + key));
+  return snap.exists() ? snap.val() : null;
 }
 
 // ---- market flow (global multiplayer price impact) ---------------------
@@ -195,7 +221,7 @@ export function watchFeed(cb, n = 30) {
   const q = query(R('feed'), orderByChild('ts'), limitToLast(n));
   const un = onValue(q, snap => {
     const rows = [];
-    snap.forEach(c => rows.push({ key: c.key, ...c.val() }));
+    snap.forEach(c => { rows.push({ key: c.key, ...c.val() }); });
     cb(rows.reverse());
   });
   Net._listeners.push(un);
@@ -208,9 +234,10 @@ export async function findUid(username) {
   return snap.exists() ? snap.val() : null;
 }
 
-export async function sendTransfer(toUid, payload) {
+export async function sendTransfer(toKey, payload) {
   const { push, set } = Net._fb;
-  await set(push(R('players/' + toUid + '/inbox')), {
+  const { uid, slot } = splitKey(toKey);
+  await set(push(R(playerPath(uid, slot) + '/inbox')), {
     ...payload, from: Net.uid, fromName: Net.name, ts: Date.now(),
   });
 }
@@ -218,9 +245,9 @@ export async function sendTransfer(toUid, payload) {
 export function watchInbox(cb) {
   if (!Net.online) return () => {};
   const { onValue } = Net._fb;
-  const un = onValue(R('players/' + Net.uid + '/inbox'), snap => {
+  const un = onValue(R(playerPath() + '/inbox'), snap => {
     const items = [];
-    snap.forEach(c => items.push({ key: c.key, ...c.val() }));
+    snap.forEach(c => { items.push({ key: c.key, ...c.val() }); });
     if (items.length) cb(items);
   });
   Net._listeners.push(un);
@@ -231,7 +258,7 @@ export async function clearInbox(keys) {
   const { update } = Net._fb;
   const patch = {};
   for (const k of keys) patch[k] = null;
-  await update(R('players/' + Net.uid + '/inbox'), patch);
+  await update(R(playerPath() + '/inbox'), patch);
 }
 
 // ---- presence ----------------------------------------------------------
@@ -241,7 +268,7 @@ let presenceTimer = null;
 export function joinPresence(name) {
   if (!Net.online) return;
   const { ref, set, onDisconnect } = Net._fb;
-  const mine = ref(Net._db, 'presence/' + Net.uid);
+  const mine = ref(Net._db, 'presence/' + slotKey());
   onDisconnect(mine).remove();
   set(mine, { name, ts: Date.now() }).catch(() => {});
   if (presenceTimer) clearInterval(presenceTimer);   // never stack heartbeats
@@ -294,18 +321,28 @@ export async function submitReport(report) {
 }
 
 // ---- chat --------------------------------------------------------------
-export function sendChat(text) {
-  if (!Net.online) return;
+export async function sendChat(text) {
+  if (!Net.online) throw new Error('You are playing solo, so there is nobody to chat to.');
   const { push, set } = Net._fb;
-  set(push(R('chat')), { name: Net.name, uid: Net.uid, text: text.slice(0, 200), ts: Date.now() }).catch(() => {});
+  await set(push(R('chat')), {
+    name: Net.name || 'anon', uid: Net.uid,
+    text: text.slice(0, 200), ts: Date.now(),
+  });
 }
 
-export function watchChat(cb, n = 40) {
+// Ordered by key rather than by a ts index. Push ids are already chronological,
+// and the indexed version was quietly returning a stale, partial view of the
+// room: messages wrote fine and were readable one by one, but the collection
+// listener never showed them. That is what "chat is not working" looked like.
+export function watchChat(cb, n = 60) {
   if (!Net.online) return () => {};
-  const { onValue, query, orderByChild, limitToLast } = Net._fb;
-  const un = onValue(query(R('chat'), orderByChild('ts'), limitToLast(n)), snap => {
-    const rows = []; snap.forEach(c => rows.push({ key: c.key, ...c.val() })); cb(rows);
-  });
+  const { onValue, query, limitToLast } = Net._fb;
+  const un = onValue(query(R('chat'), limitToLast(n)), snap => {
+    const rows = [];
+    snap.forEach(c => { rows.push({ key: c.key, ...c.val() }); });
+    rows.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    cb(rows);
+  }, err => console.warn('chat listener:', err && err.message));
   Net._listeners.push(un);
   return un;
 }

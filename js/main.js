@@ -1,14 +1,54 @@
 // Entry point: login screen, Firebase wiring, then hand off to the game loop.
-import * as G from './game.js?v=2.0';
-import * as Net from './net.js?v=2.0';
-import { UI } from './ui.js?v=2.0';
-import { setFlow, marketIndex, nowTick } from './market.js?v=2.0';
+import * as G from './game.js?v=2.1';
+import * as Net from './net.js?v=2.1';
+import { UI } from './ui.js?v=2.1';
+import { setFlow, marketIndex, nowTick } from './market.js?v=2.1';
 
 const $ = s => document.querySelector(s);
+
+// Three save slots, so a run that goes badly is not the end of the game.
+// Asked for three times: twice by Yesmans, once by johnchicken.
+let wipeArmed = 0;
+
+function renderSlots() {
+  const box = $('#slot-picker');
+  box.innerHTML = '';
+  for (let i = 1; i <= G.SLOTS; i++) {
+    const info = G.slotSummary(i);
+    const card = document.createElement('button');
+    card.className = 'slot' + (i === G.SLOT ? ' on' : '');
+    card.innerHTML = info.empty
+      ? '<b>Slot ' + i + '</b><span>empty</span><span>new game</span>'
+      : '<b>Slot ' + i + '</b><span>' + info.name + '</span><span>' + G.fmt(info.netWorth) + '</span>';
+    card.addEventListener('click', () => {
+      G.setSlot(i);
+      const s = G.slotSummary(i);
+      if (!s.empty && s.name) $('#name').value = s.name;
+      wipeArmed = 0;
+      renderSlots();
+    });
+    if (!info.empty) {
+      const wipe = document.createElement('span');
+      wipe.className = 'wipe';
+      wipe.textContent = wipeArmed === i ? 'Tap again to wipe' : 'Restart';
+      wipe.addEventListener('click', e => {
+        e.stopPropagation();
+        if (wipeArmed !== i) { wipeArmed = i; renderSlots(); return; }
+        G.resetSlot(i);
+        wipeArmed = 0;
+        $('#setup-status').textContent = 'Slot ' + i + ' wiped. It starts again at ' + G.fmt(G.START_CASH) + '.';
+        renderSlots();
+      });
+      card.appendChild(wipe);
+    }
+    box.appendChild(card);
+  }
+}
 
 function showSetup() {
   $('#setup').hidden = false;
   UI.initChangelog();
+  renderSlots();
   const cfg = Net.loadConfig();
   $('#cfg-json').value = cfg ? JSON.stringify(cfg, null, 2) : '';
   $('#setup-status').textContent = cfg
@@ -67,6 +107,7 @@ async function start(online) {
     return;
   }
   localStorage.setItem('is_name', name);
+  Net.Net.slot = G.SLOT;
   $('#setup-status').textContent = 'Loading market...';
 
   if (online) {

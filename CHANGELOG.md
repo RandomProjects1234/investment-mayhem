@@ -1,10 +1,21 @@
 # Changelog
 
-All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v2.0**.
+All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v2.1**.
 
 This file is generated from `js/changelog.js`, which is also what the in-game
 update log reads — click the version badge in the corner. Edit that file, then
 run `node tools/release.mjs`.
+
+## v2.1 — Save slots, rivals, and a Players tab worth opening
+*2026-09-04*
+
+- **New** — Three save slots. Pick one on the menu, each keeps its own run, and each has a Restart that wipes it back to a hundred thousand. Asked for three times: twice by Yesmans and once by johnchicken, who wanted a way out of a bad start. A slot is its own player online too, with its own name and its own place on the board.
+- **New** — Eight rival traders on the leaderboard, so it is never empty and there is always something to beat. IndexAnt just buys the broad fund. MomentumMo chases whatever ran hardest, DipDiana buys whatever fell instead, CoinCarl is crypto only, BondBarb is smug when rates fall, CashCliff mostly waits. They trade the real market on a four hour rebalance and need no server: a rival is a pure function of the same prices you see, so every browser agrees on their net worth to the cent.
+- **New** — The Players tab has been rebuilt. Tap anyone on the board, human or rival, to see their card: net worth, season return, trades, biggest holdings and how long they have been playing. There is a list of who is online, and chat now shows timestamps. Asked for by johnchicken.
+- **Fix** — Chat was genuinely broken, and so was half the live tape. Every list read from the server stopped after its first entry: the code walked the results with a callback that returned the new array length, and the database treats any truthy return as "stop here". Messages sent fine and were stored fine, which is why it looked like they vanished. Chat went from showing one message to showing all of them, and the tape from one trade to thirty. Reported by johnchicken.
+- **Fix** — Transfers had the same fault, so a batch of incoming gifts would only ever hand over the first one.
+- **Tuning** — Commission halved to 0.1%, and the total you have paid is now on the portfolio. A player reported that a stock "immediately goes down once you buy it": most of that was the commission landing as an instant paper loss, and it was never labelled. Reported by Yesman.
+- **Fix** — Everything on the server syncs every six seconds instead of fifteen, so other players and the board stop feeling a step behind. Reported by johnchicken.
 
 ## v2.0 — Films, the league, and the street market
 *2026-09-03*
