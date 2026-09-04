@@ -1,10 +1,18 @@
 # Changelog
 
-All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v1.9**.
+All notable changes to [Investment Mayhem](https://randomprojects1234.github.io/investment-mayhem/). Current build: **v2.0**.
 
 This file is generated from `js/changelog.js`, which is also what the in-game
 update log reads — click the version badge in the corner. Edit that file, then
 run `node tools/release.mjs`.
+
+## v2.0 — Films, the league, and the street market
+*2026-09-03*
+
+- **New** — Films. Back a picture before it opens and get paid on what it takes at the box office. A new slate every fifteen minutes, each with a budget and a hype level: hype lifts the average, but a flop is always on the table and a sleeper can run a long way. Asked for by Yesman.
+- **New** — The League. Twenty teams, everyone plays everyone once, a season every two hours with twenty minutes of betting at the start. Back a team to win it or to finish in the top four, and watch the table fill in matchday by matchday. Asked for by Yesman, who wanted something to back between tournaments.
+- **New** — The street market. Knock-off designer gear bought by the lot: hoodies, trainers, watches, handbags. Some of it goes to the right buyer for several times what you paid and about one lot in six is seized, in which case you get nothing. You find out when you try to sell. Also asked for by Yesman.
+- **New** — That clears the request list. Every idea that came in through the report button has now been built: countries, the cup, a collectibles tab, films, the league and the street market.
 
 ## v1.9 — The Cup, and a home for collectibles
 *2026-09-03*

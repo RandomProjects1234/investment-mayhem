@@ -1,9 +1,20 @@
 // Release history and roadmap. Rendered in-game (click the version badge) and
 // mirrored in CHANGELOG.md / ROADMAP.md so the repo tells the same story.
 
-export const VERSION = 'v1.9';
+export const VERSION = 'v2.0';
 
 export const RELEASES = [
+  {
+    version: 'v2.0',
+    date: '2026-09-03',
+    title: 'Films, the league, and the street market',
+    items: [
+      ['new', 'Films. Back a picture before it opens and get paid on what it takes at the box office. A new slate every fifteen minutes, each with a budget and a hype level: hype lifts the average, but a flop is always on the table and a sleeper can run a long way. Asked for by Yesman.'],
+      ['new', 'The League. Twenty teams, everyone plays everyone once, a season every two hours with twenty minutes of betting at the start. Back a team to win it or to finish in the top four, and watch the table fill in matchday by matchday. Asked for by Yesman, who wanted something to back between tournaments.'],
+      ['new', 'The street market. Knock-off designer gear bought by the lot: hoodies, trainers, watches, handbags. Some of it goes to the right buyer for several times what you paid and about one lot in six is seized, in which case you get nothing. You find out when you try to sell. Also asked for by Yesman.'],
+      ['new', 'That clears the request list. Every idea that came in through the report button has now been built: countries, the cup, a collectibles tab, films, the league and the street market.'],
+    ],
+  },
   {
     version: 'v1.9',
     date: '2026-09-03',
@@ -152,23 +163,21 @@ export const RELEASES = [
 
 // What the next update is aiming at. Ordered by what would change the game most.
 export const NEXT = {
-  version: 'v2.0',
-  title: 'The rest of the request list',
+  version: 'v2.1',
+  title: 'Whatever you ask for next',
   items: [
-    ['Upcoming films',
-     'Yesman asked to invest in films that have not come out yet, earning from how popular they turn out and how many tickets they sell worldwide. A slate of sequels, a budget, an opening weekend.'],
-    ['League games, not just the cup',
-     'Yesman again: back teams across a league season rather than only a knockout, so there is something running between tournaments.'],
-    ['The counterfeit market',
-     'Also Yesman: buy fakes cheap and try to sell them high, with the obvious risk that a lot turns out to be worthless.'],
+    ['Your reports',
+     'The request list is empty for the first time. Everything that came in through the report button has been built, so what happens next is up to whoever files the next one.'],
     ['Price alerts',
-     'Tell the game to shout when something crosses a level, instead of watching for it.'],
+     'Tell the game to shout when something crosses a level, instead of watching for it. The order engine already replays the ticks you missed, so an alert can tell you what happened while you were away.'],
     ['A first run walkthrough',
-     'There is a great deal in here now. A new player deserves a guided first ten minutes.'],
+     'There is a great deal in here now: stocks, funds, property, bonds, savings, collectibles, countries, films, angel deals, the cup, the league, the street market, orders, shorts, margin and options. A new player deserves a guided first ten minutes.'],
+    ['Trade history you can take with you',
+     'Export your fills so a season can be argued about properly.'],
   ],
   later: [
     ['Server-authoritative trading and settling',
-     'The honest fix for both cheating and cup results: run trades and settlements on a server so a browser cannot invent an outcome. It needs Firebase on the paid plan, so it is a decision to make rather than a thing to code.'],
+     'The honest fix for both cheating and predictable results: run trades and settlements on a server so a browser cannot invent an outcome. It needs Firebase on the paid plan, so it is a decision to make rather than a thing to code.'],
     ['Bots', 'A few simulated traders so a quiet server still has a market worth beating.'],
   ],
 };

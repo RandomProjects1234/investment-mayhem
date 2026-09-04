@@ -1,13 +1,13 @@
 // All DOM rendering. Rows are built once per filter change and only their
 // number cells are rewritten on each tick, so 640 stocks stay smooth.
-import * as G from './game.js?v=1.9';
+import * as G from './game.js?v=2.0';
 import { priceNow, priceAt, changePct, history, nowTick, marketIndex,
          recentEvents, flowOf, flowImpact, policyRate, bondYield,
-         nextEarningsTick, earningsQuarter, earningsSurprise, isVacant } from './market.js?v=1.9';
-import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=1.9';
-import * as Cup from './cup.js?v=1.9';
-import * as Net from './net.js?v=1.9';
-import { RELEASES, NEXT, VERSION } from './changelog.js?v=1.9';
+         nextEarningsTick, earningsQuarter, earningsSurprise, isVacant } from './market.js?v=2.0';
+import { SECTORS, SECTOR_BY_ID, REGIONS, PROP_TYPES, STARTUP_ROUND_TICKS } from './data.js?v=2.0';
+import * as Cup from './cup.js?v=2.0';
+import * as Net from './net.js?v=2.0';
+import { RELEASES, NEXT, VERSION } from './changelog.js?v=2.0';
 
 const $ = s => document.querySelector(s);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -86,6 +86,7 @@ function boot() {
   buildBank();
   buildCountries();
   buildCup();
+  buildLeague();
   buildLoan();
   buildTransfer();
   const rent2 = $('#p-collect2');
@@ -102,12 +103,12 @@ function buildTab() {
   if (UI.tab === 'stocks') renderStockRows();
   if (UI.tab === 'property') renderPropRows();
   if (UI.tab === 'alts') renderAltRows();
-  if (UI.tab === 'collect') renderCollectRows();
+  if (UI.tab === 'collect') { renderCollectRows(); renderStreet(); }
   if (UI.tab === 'cup') renderCup();
   if (UI.tab === 'bank') renderBank();
   if (UI.tab === 'countries') renderCountryRows();
   if (UI.tab === 'orders') renderOrders();
-  if (UI.tab === 'angel') renderAngel();
+  if (UI.tab === 'angel') { renderAngel(); renderFilms(); }
   if (UI.tab === 'social') { renderLeaderboard(); renderFeed(); renderChat(); }
   refresh();
 }
@@ -135,6 +136,7 @@ function refresh() {
   else if (UI.tab === 'countries') tickCountryRows();
   else if (UI.tab === 'orders') renderOrders();
   else if (UI.tab === 'angel') tickAngel();
+  else if (UI.tab === 'collect') tickCollectRows();
   if (modalAsset) tickModal();
   refreshSaveStatus();
   renderNews();
@@ -708,6 +710,7 @@ function renderCup() {
   }
   tickCup();
   renderCupResults(edition, t);
+  renderLeague();
   renderCupBets();
 }
 
@@ -754,13 +757,127 @@ function renderCupBets() {
   if (!bets.length) { box.appendChild(el('div', 'empty', 'No bets yet.')); return; }
   for (const b of bets.slice(0, 20)) {
     const t = Cup.team(b.teamId);
-    const market = (Cup.MARKETS.find(m => m.id === b.market) || {}).name || b.market;
+    const market = (Cup.MARKETS.concat(Cup.LEAGUE_MARKETS).find(m => m.id === b.market) || {}).name || b.market;
     const d = el('div', 'betline ' + (b.status === 'won' ? 'up' : b.status === 'lost' ? 'down' : ''));
     d.innerHTML = '<span>' + escapeHtml(t ? t.name : b.teamId) + ' - ' + market + '</span>' +
       '<b>' + (b.status === 'open' ? G.fmt(b.stake) + ' at ' + b.odds.toFixed(2)
         : b.status === 'won' ? '+' + G.fmt(b.payout - b.stake) : '-' + G.fmt(b.stake)) + '</b>';
     box.appendChild(d);
   }
+}
+
+// ---------------- films ----------------
+function renderFilms() {
+  const body = $('#film-body'); body.innerHTML = '';
+  const t = nowTick();
+  for (const f of G.currentFilms()) {
+    const mine = G.state.films[f.id];
+    const card = el('div', 'card startup film');
+    card.innerHTML =
+      '<div class="su-head"><b>' + escapeHtml(f.title) + '</b><span class="hype">hype ' + f.hype + '</span></div>' +
+      '<p>' + f.genre + ' &middot; budget ' + G.fmt(f.budget) + '</p>' +
+      '<div class="su-meta">Opens in about ' + Math.round(f.maturity * 3 / 60) + ' min</div>';
+    if (mine) {
+      card.appendChild(el('div', 'su-mine', mine.resolved
+        ? (mine.mult < 1 ? 'Took ' + mine.mult.toFixed(2) + 'x. ' + G.fmt(mine.payout) + ' back'
+                         : 'A hit at ' + mine.mult.toFixed(2) + 'x for ' + G.fmt(mine.payout))
+        : 'In for ' + G.fmt(mine.amount) + ' - waiting on the opening'));
+    } else {
+      const row = el('div', 'su-buy');
+      const inp = el('input'); inp.type = 'number'; inp.min = '100';
+      inp.value = String(Math.min(f.ask, Math.floor(G.state.cash * 0.05)) || 1000);
+      const b = el('button', 'mini', 'Back it');
+      b.addEventListener('click', () => { toast(G.investFilm(f, Number(inp.value)).msg); renderFilms(); refresh(); });
+      row.append(inp, b);
+      card.appendChild(row);
+    }
+    body.appendChild(card);
+  }
+  $('#film-next').textContent = 'new slate in ' +
+    Math.ceil((300 - (t % 300)) * 3 / 60) + ' min';
+
+  const mine = $('#film-mine'); mine.innerHTML = '';
+  const ids = Object.keys(G.state.films);
+  if (ids.length) mine.appendChild(el('div', 'hint', 'Films you have backed:'));
+  for (const id of ids.reverse().slice(0, 10)) {
+    const f = G.state.films[id];
+    const d = el('div', 'betline ' + (f.resolved ? (f.mult >= 1 ? 'up' : 'down') : ''));
+    d.innerHTML = '<span>' + escapeHtml(f.title) + '</span><b>' +
+      (f.resolved ? f.mult.toFixed(2) + 'x  ' + G.fmt(f.payout) : G.fmt(f.amount) + ' pending') + '</b>';
+    mine.appendChild(d);
+  }
+}
+
+// ---------------- the street market ----------------
+function renderStreet() {
+  const body = $('#street-body'); body.innerHTML = '';
+  for (const lot of G.streetLots()) {
+    const pos = G.state.street[lot.id];
+    const row = el('div', 'row streetrow');
+    row.innerHTML =
+      '<div class="c sym"><b>' + lot.name + '</b></div>' +
+      '<div class="c num">' + G.fmt(lot.price) + '</div>' +
+      '<div class="c num">' + (pos ? G.fmtUnits(pos.units) + ' @ ' + G.fmt(pos.cost) : '') + '</div>' +
+      '<div class="c act"></div>';
+    const act = row.querySelector('.act');
+    const buy = el('button', 'mini', 'Buy');
+    buy.addEventListener('click', () => { toast(G.buyLot(lot.id, 1).msg); renderStreet(); refresh(); });
+    act.appendChild(buy);
+    if (pos) {
+      const sell = el('button', 'mini danger', 'Move it');
+      sell.addEventListener('click', () => { toast(G.sellLot(lot.id).msg); renderStreet(); refresh(); });
+      act.appendChild(sell);
+    }
+    body.appendChild(row);
+  }
+}
+
+// ---------------- the league ----------------
+function buildLeague() {
+  const sel = $('#league-market');
+  for (const m of Cup.LEAGUE_MARKETS) sel.appendChild(new Option(m.name, m.id));
+  sel.addEventListener('change', renderLeague);
+  $('#league-stake').value = '1000';
+}
+
+function renderLeague() {
+  const t = nowTick();
+  const sn = Cup.currentLeagueSeason();
+  const md = Cup.matchdaysPlayed(sn, t);
+  const market = $('#league-market').value || 'league';
+  const open = Cup.leagueBettingOpen(sn, t);
+  $('#league-status').textContent = 'Season ' + (sn % 1000) +
+    (md === 0 ? ' - betting open' : md >= 19 ? ' - finished' : ' - ' + md + ' of 19 played');
+  $('#league-next').textContent = open
+    ? 'betting closes in ' + Math.max(0, Math.round((Cup.leagueStart(sn) + Cup.LEAGUE_OPEN - t) * 3 / 60)) + ' min'
+    : 'next season in ' + Math.max(0, Math.round((Cup.leagueEnd(sn) - t) * 3 / 60)) + ' min';
+
+  const table = Cup.leagueTable(sn, md);
+  const body = $('#league-body'); body.innerHTML = '';
+  const head = el('div', 'row head leaguerow');
+  head.innerHTML = '<div class="c rank">#</div><div class="c sym">Team</div><div class="c num">P</div>' +
+    '<div class="c num">GD</div><div class="c num">Odds</div><div class="c act"></div>';
+  body.appendChild(head);
+  table.forEach((r, i) => {
+    const tm = Cup.team(r.id);
+    const price = Cup.leagueOdds(market, r.id);
+    const row = el('div', 'row leaguerow');
+    row.innerHTML = '<div class="c rank">' + (i + 1) + '</div>' +
+      '<div class="c sym"><b>' + escapeHtml(tm.name) + '</b></div>' +
+      '<div class="c num">' + r.pts + '</div>' +
+      '<div class="c num">' + (r.gf - r.ga >= 0 ? '+' : '') + (r.gf - r.ga) + '</div>' +
+      '<div class="c num">' + price.toFixed(2) + '</div>' +
+      '<div class="c act"></div>';
+    const btn = el('button', 'mini', open ? 'Back' : 'Closed');
+    btn.disabled = !open;
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      toast(G.placeBet(market, r.id, Number($('#league-stake').value), 'league').msg);
+      renderLeague(); renderCupBets(); refresh();
+    });
+    row.querySelector('.act').appendChild(btn);
+    body.appendChild(row);
+  });
 }
 
 // ---------------- bank and bonds ----------------

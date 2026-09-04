@@ -6,8 +6,8 @@
 // to the real market. Properties, alt assets and startups are fictional and
 // generated procedurally from WORLD_SEED, so nothing needs to be stored server
 // side: every client rebuilds the identical universe in ~15ms.
-import { rngFrom, hash32, pick, rr, clamp } from './rng.js?v=1.9';
-import { SECTOR_ROWS, FUNDS } from './companies.js?v=1.9';
+import { rngFrom, hash32, pick, rr, clamp } from './rng.js?v=2.0';
+import { SECTOR_ROWS, FUNDS } from './companies.js?v=2.0';
 
 // Frozen on purpose. The seed decides every property, collectible and startup
 // in the world; changing it would rebuild them all and orphan saved holdings,
@@ -360,6 +360,71 @@ export function generateStartups(round) {
     });
   }
   return out;
+}
+
+// ---------------- Films ----------------
+// Yesman asked to invest in films that have not come out yet, and to be paid on
+// how popular they turn out and how many tickets they sell. A slate rotates
+// every fifteen minutes; each one has a budget, a hype level, and an opening.
+export const FILM_ROUND_TICKS = 300;
+
+const FILM_A = ['Return to', 'The Last', 'Rise of', 'Beyond', 'Echoes of', 'Legacy of', 'Night of', 'The Second', 'Shadows of', 'Kingdom of'];
+const FILM_B = ['Aurora', 'the Deep', 'Ironhold', 'the Vault', 'Redwater', 'the Ninth', 'Glasstown', 'the Comet', 'Blackpine', 'the Harbour'];
+const FILM_GENRE = ['blockbuster sequel', 'animated sequel', 'superhero follow-up', 'space epic', 'heist sequel', 'monster feature', 'spy thriller', 'disaster picture'];
+
+export function generateFilms(round) {
+  const rand = rngFrom(WORLD_SEED + ':films:' + round);
+  const out = [];
+  for (let i = 0; i < 6; i++) {
+    const hype = Math.round(rr(rand, 25, 98));
+    out.push({
+      kind: 'film', id: 'F:' + round + ':' + i,
+      title: pick(rand, FILM_A) + ' ' + pick(rand, FILM_B),
+      genre: pick(rand, FILM_GENRE),
+      budget: Math.round(rr(rand, 40, 320)) * 1e6,
+      hype,
+      ask: Math.round(rr(rand, 2000, 60000) / 500) * 500,
+      maturity: Math.round(rr(rand, 80, 200)),
+      round,
+    });
+  }
+  return out;
+}
+
+// Box office decides the payout: hype raises the average, but a flop is always
+// possible and a sleeper hit can run a long way.
+export function filmOutcome(filmId, hype) {
+  const r = rngFrom('boxoffice:' + filmId);
+  const roll = r();
+  const lean = hype / 100;
+  if (roll < 0.28 - lean * 0.12) return 0.15 + r() * 0.35;      // bombed
+  if (roll < 0.62 - lean * 0.10) return 0.7 + r() * 0.6;        // made its money back
+  if (roll < 0.94) return 1.4 + r() * (1.2 + lean * 2.2);       // a hit
+  return 3.5 + r() * (3 + lean * 6);                            // a phenomenon
+}
+
+// ---------------- The street market ----------------
+// Also Yesman: buy knock-off designer gear cheap and try to sell it on. Some
+// lots are worth a fortune to the right buyer; some are seized at the border
+// and you get nothing. You do not find out which until you try to sell.
+export const STREET_LOTS = [
+  ['Box of 40 hoodies', 1800], ['Pallet of trainers', 5200], ['Case of watches', 9500],
+  ['Crate of handbags', 7400], ['Bundle of jackets', 3100], ['Sack of sunglasses', 950],
+  ['Container of tracksuits', 15800], ['Rack of belts', 640], ['Carton of perfume', 2300],
+  ['Job lot of scarves', 480], ['Suitcase of jewellery', 12500], ['Trolley of caps', 720],
+].map(([name, price], i) => ({
+  kind: 'street', id: 'X:' + i, name,
+  price, seed: hash32('street:' + i) | 0,
+}));
+
+// What a lot fetches, fixed the moment you bought it and revealed when you sell.
+export function streetOutcome(lotId, boughtTick) {
+  const r = rngFrom('street:' + lotId + ':' + Math.floor(boughtTick / 20));
+  const roll = r();
+  if (roll < 0.18) return 0;                       // seized, the lot is gone
+  if (roll < 0.45) return 0.4 + r() * 0.5;         // shifted at a loss
+  if (roll < 0.85) return 1.1 + r() * 0.9;         // a decent turn
+  return 2.2 + r() * 2.6;                          // the right buyer walked in
 }
 
 // Deterministic payout multiple, only revealed once the investment matures.

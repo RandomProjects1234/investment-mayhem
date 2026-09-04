@@ -1,30 +1,26 @@
 # Roadmap
 
-## Next up — v2.0: The rest of the request list
+## Next up — v2.1: Whatever you ask for next
 
-### Upcoming films
+### Your reports
 
-Yesman asked to invest in films that have not come out yet, earning from how popular they turn out and how many tickets they sell worldwide. A slate of sequels, a budget, an opening weekend.
-
-### League games, not just the cup
-
-Yesman again: back teams across a league season rather than only a knockout, so there is something running between tournaments.
-
-### The counterfeit market
-
-Also Yesman: buy fakes cheap and try to sell them high, with the obvious risk that a lot turns out to be worthless.
+The request list is empty for the first time. Everything that came in through the report button has been built, so what happens next is up to whoever files the next one.
 
 ### Price alerts
 
-Tell the game to shout when something crosses a level, instead of watching for it.
+Tell the game to shout when something crosses a level, instead of watching for it. The order engine already replays the ticks you missed, so an alert can tell you what happened while you were away.
 
 ### A first run walkthrough
 
-There is a great deal in here now. A new player deserves a guided first ten minutes.
+There is a great deal in here now: stocks, funds, property, bonds, savings, collectibles, countries, films, angel deals, the cup, the league, the street market, orders, shorts, margin and options. A new player deserves a guided first ten minutes.
+
+### Trade history you can take with you
+
+Export your fills so a season can be argued about properly.
 
 ## Further out
 
-- **Server-authoritative trading and settling** — The honest fix for both cheating and cup results: run trades and settlements on a server so a browser cannot invent an outcome. It needs Firebase on the paid plan, so it is a decision to make rather than a thing to code.
+- **Server-authoritative trading and settling** — The honest fix for both cheating and predictable results: run trades and settlements on a server so a browser cannot invent an outcome. It needs Firebase on the paid plan, so it is a decision to make rather than a thing to code.
 - **Bots** — A few simulated traders so a quiet server still has a market worth beating.
 
 ---

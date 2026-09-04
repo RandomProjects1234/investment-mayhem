@@ -9,8 +9,8 @@
 // running it. That also means a player reading this file could work out a
 // result before backing it; the honest fix is settling from a server, which is
 // the same open problem as the rest of the game and is on the roadmap.
-import { rngFrom, hashF } from './rng.js?v=1.9';
-import { nowTick } from './market.js?v=1.9';
+import { rngFrom, hashF } from './rng.js?v=2.0';
+import { nowTick } from './market.js?v=2.0';
 
 export const EDITION_TICKS = 1200;        // a new tournament every hour
 export const OPEN_WINDOW = 300;           // the first 15 minutes are for betting
@@ -185,5 +185,72 @@ export function betWon(result, market, teamId) {
     const final = result.rounds[result.rounds.length - 1].matches[0];
     return final.a === teamId || final.b === teamId;
   }
+  return false;
+}
+
+
+// ---- the league --------------------------------------------------------
+// Yesman asked for something to bet on between tournaments: a 20 team league
+// season that runs on its own clock, every team playing every other once.
+export const LEAGUE_TICKS = 2400;          // a season every two hours
+export const LEAGUE_OPEN = 400;            // twenty minutes of betting first
+export const LEAGUE_TEAMS = TEAMS.slice(0, 20);
+
+export const leagueSeasonOf = t => Math.floor(t / LEAGUE_TICKS);
+export const leagueStart = sn => sn * LEAGUE_TICKS;
+export const leagueEnd = sn => leagueStart(sn) + LEAGUE_TICKS;
+export const currentLeagueSeason = () => leagueSeasonOf(nowTick());
+export const leagueBettingOpen = (sn, t) => t < leagueStart(sn) + LEAGUE_OPEN;
+
+// How far through the fixture list we are: 0 to 19 matchdays.
+export function matchdaysPlayed(sn, t) {
+  const since = t - leagueStart(sn) - LEAGUE_OPEN;
+  if (since < 0) return 0;
+  const per = (LEAGUE_TICKS - LEAGUE_OPEN) / 19;
+  return Math.max(0, Math.min(19, Math.floor(since / per) + 1));
+}
+
+// Every pair plays once. 190 matches, cheap enough to replay on demand.
+export function leagueTable(sn, upToMatchday = 19) {
+  const rows = {};
+  for (const t of LEAGUE_TEAMS) rows[t.id] = { id: t.id, pts: 0, gf: 0, ga: 0, played: 0 };
+  for (let i = 0; i < LEAGUE_TEAMS.length; i++) {
+    for (let j = i + 1; j < LEAGUE_TEAMS.length; j++) {
+      // spread the fixtures across the matchdays so a table fills in gradually
+      const matchday = (i + j) % 19;
+      if (matchday >= upToMatchday) continue;
+      const a = LEAGUE_TEAMS[i].id, b = LEAGUE_TEAMS[j].id;
+      const m = playMatch('L' + sn, matchday, i * 20 + j, a, b);
+      const ra = rows[a], rb = rows[b];
+      ra.gf += m.ga; ra.ga += m.gb; rb.gf += m.gb; rb.ga += m.ga;
+      ra.played++; rb.played++;
+      if (m.ga > m.gb) ra.pts += 3;
+      else if (m.gb > m.ga) rb.pts += 3;
+      else { ra.pts++; rb.pts++; }
+    }
+  }
+  return Object.values(rows).sort((x, y) =>
+    y.pts - x.pts || (y.gf - y.ga) - (x.gf - x.ga) || y.gf - x.gf ||
+    team(y.id).strength - team(x.id).strength);
+}
+
+export const LEAGUE_MARKETS = [
+  { id: 'league', name: 'Wins the league' },
+  { id: 'top4', name: 'Finishes top four' },
+];
+
+export function leagueOdds(market, teamId) {
+  const t = team(teamId);
+  if (!t) return 1;
+  const pool = LEAGUE_TEAMS.reduce((sum, x) => sum + Math.pow(x.strength / 60, 11), 0);
+  let p = Math.pow(t.strength / 60, 11) / pool;
+  if (market === 'top4') p = Math.min(0.95, p * 3.6);
+  return Math.max(1.05, Math.round((0.88 / p) * 100) / 100);
+}
+
+export function leagueBetWon(sn, market, teamId) {
+  const table = leagueTable(sn);
+  if (market === 'league') return table[0].id === teamId;
+  if (market === 'top4') return table.slice(0, 4).some(r => r.id === teamId);
   return false;
 }

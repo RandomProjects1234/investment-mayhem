@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Investment Mayhem — Multiplayer Investing Sim</title>
-<link rel="stylesheet" href="style.css?v=1.9">
+<link rel="stylesheet" href="style.css?v=2.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📈</text></svg>">
-<script src="firebase-config.js?v=1.9"></script>
+<script src="firebase-config.js?v=2.0"></script>
 </head>
 <body>
 
@@ -14,7 +14,7 @@
 <div id="setup" class="setup" hidden>
   <div class="setup-card">
     <h1>Investment Mayhem</h1>
-    <div class="ver-line">version <b>v1.9</b> &middot; <button id="cl-open" class="linkish inline">what's new</button></div>
+    <div class="ver-line">version <b>v2.0</b> &middot; <button id="cl-open" class="linkish inline">what's new</button></div>
     <p class="tag">A multiplayer market simulation. 624 real listed companies, 10 index funds,
        260 properties, crypto, commodities and angel deals — all on one shared clock.</p>
     <p class="disclaimer">Ticker symbols and company names are real; <b>every price in this game is
@@ -201,6 +201,15 @@
           <div class="c num">Owned</div></div>
         <div id="collect-body2"></div>
       </div>
+      <div class="card">
+        <h2>The street market</h2>
+        <p class="hint">Knock-off designer gear, bought by the lot. Some of it goes to the right
+          buyer for several times what you paid; about one lot in six is seized and you get
+          nothing. You find out when you try to sell. Asked for by Yesman.</p>
+        <div class="row head streetrow"><div class="c sym">Lot</div><div class="c num">Price</div>
+          <div class="c num">Held</div><div class="c act"></div></div>
+        <div id="street-body"></div>
+      </div>
     </section>
 
     <!-- cup -->
@@ -219,6 +228,17 @@
           <div class="c num">Rating</div><div class="c num">Odds</div><div class="c num">Returns</div>
           <div class="c act"></div></div>
         <div id="cup-body"></div>
+      </div>
+      <div class="card">
+        <h2>The League <small id="league-status"></small></h2>
+        <p class="hint">Twenty teams, everyone plays everyone once, a season every two hours with
+          twenty minutes of betting at the start. Something to back between tournaments.</p>
+        <div class="controls">
+          <select id="league-market"></select>
+          <input id="league-stake" type="number" min="1" placeholder="Stake">
+          <span id="league-next" class="count"></span>
+        </div>
+        <div id="league-body"></div>
       </div>
       <div class="grid2">
         <div class="card"><h2>Results so far</h2><div id="cup-results" class="scroll"></div></div>
@@ -334,8 +354,16 @@
         <div id="angel-body" class="cards"></div>
       </div>
       <div class="card">
+        <h2>Films <small id="film-next"></small></h2>
+        <p class="hint">Back a picture before it opens and get paid on what it takes at the box
+          office. Hype lifts the average, but a flop is always on the table and a sleeper can run
+          a long way. Asked for by Yesman.</p>
+        <div id="film-body" class="cards"></div>
+      </div>
+      <div class="card">
         <h2>Your positions</h2>
         <div id="angel-mine"></div>
+        <div id="film-mine"></div>
       </div>
     </section>
 
@@ -437,7 +465,7 @@
 </div>
 
 <button id="report-open" title="Report a bug">Report a bug</button>
-<button id="version" title="Update log">v1.9</button>
+<button id="version" title="Update log">v2.0</button>
 
 <!-- ---------------- bug report ---------------- -->
 <div id="report" hidden>
@@ -472,12 +500,12 @@
   <div class="sheet">
     <button id="cl-close" class="x">&times;</button>
     <h1 class="cl-h">Investment Mayhem</h1>
-    <div class="ver-line">update log &middot; <b id="cl-version">v1.9</b></div>
+    <div class="ver-line">update log &middot; <b id="cl-version">v2.0</b></div>
     <div id="cl-next"></div>
     <div id="cl-body"></div>
   </div>
 </div>
 <div id="toast" hidden></div>
-<script type="module" src="js/main.js?v=1.9"></script>
+<script type="module" src="js/main.js?v=2.0"></script>
 </body>
 </html>
